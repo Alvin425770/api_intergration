@@ -1,4 +1,5 @@
 import { listings } from '../mock-data';
+import ListingsMap from '../components/ListingsMap';
 import './Home.css';
 
 function Home() {
@@ -52,6 +53,15 @@ function Home() {
             <p>Only once you confirm move-in does payment reach the landlord.</p>
           </div>
         </div>
+      </section>
+
+      {/* MAP */}
+      <section className="map-section">
+        <h2>Explore Nairobi &amp; Kiambu</h2>
+        <p className="map-section-sub">
+          Browse verified listings by location. Click a pin to see details.
+        </p>
+        <ListingsMap listings={listings} />
       </section>
 
       {/* FEATURED LISTINGS */}

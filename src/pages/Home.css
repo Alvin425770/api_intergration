@@ -146,6 +146,26 @@
   color: var(--on-surface-variant);
 }
 
+.map-section {
+  padding: 120px 80px;
+  border-top: 1px solid var(--outline-variant);
+}
+
+.map-section h2 {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 48px;
+  color: var(--on-surface);
+  margin: 0 0 12px;
+}
+
+.map-section-sub {
+  font-family: var(--font-body);
+  font-size: 16px;
+  color: var(--on-surface-variant);
+  margin: 0 0 40px;
+}
+
 .featured {
   padding: 120px 80px 160px;
   border-top: 1px solid var(--outline-variant);
@@ -241,6 +261,14 @@
   .how-it-works-grid {
     grid-template-columns: 1fr;
     gap: 40px;
+  }
+
+  .map-section {
+    padding: 60px 24px;
+  }
+
+  .map-section h2 {
+    font-size: 32px;
   }
 
   .featured {
