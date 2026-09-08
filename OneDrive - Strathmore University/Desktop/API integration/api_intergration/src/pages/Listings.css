@@ -1,0 +1,42 @@
+.listings-page {
+  padding: 80px 80px 120px;
+}
+
+.listings-page h1 {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 48px;
+  color: var(--on-surface);
+  margin-bottom: 40px;
+}
+
+.listings-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 32px;
+  margin-top: 40px;
+}
+
+.listings-grid p {
+  font-family: var(--font-body);
+  font-size: 16px;
+  color: var(--on-surface-variant);
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 60px 0;
+}
+
+@media (max-width: 900px) {
+  .listings-page {
+    padding: 60px 24px 80px;
+  }
+
+  .listings-page h1 {
+    font-size: 32px;
+  }
+
+  .listings-grid {
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+}

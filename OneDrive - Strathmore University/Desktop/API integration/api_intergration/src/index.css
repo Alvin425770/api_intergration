@@ -1,0 +1,48 @@
+:root {
+  --primary: #000101;
+  --on-primary: #ffffff;
+  --secondary: #5e5e5b;
+  --tertiary: #c86a43;
+  --background: #fcf9f5;
+  --surface: #ffffff;
+  --on-surface: #1c1c1a;
+  --on-surface-variant: #44474a;
+  --outline: #75777a;
+  --outline-variant: #c5c6ca;
+  --error: #ba1a1a;
+
+  --font-display: 'Libre Caslon Text', Georgia, serif;
+  --font-body: 'Manrope', -apple-system, sans-serif;
+
+  --space-unit: 8px;
+  --gutter: 24px;
+  --margin-desktop: 80px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--background);
+  color: var(--on-surface);
+  font-family: var(--font-body);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+a {
+  text-decoration: none;
+  color: inherit;
+}
+
+h1, h2, h3, h4 {
+  margin: 0;
+}
+
+p {
+  margin: 0;
+}
