@@ -9,6 +9,7 @@ import ListingDetail from './pages/ListingDetail';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import BookingDetail from './pages/BookingDetail';
+import StudentsTable from './StudentsTable';
 import './styles/auth.css';
 import './index.css';
 
@@ -52,6 +53,7 @@ function App() {
             </ProtectedRoute>
           }
         />
+        <Route path="/students" element={<StudentsTable />} />
       </Routes>
       <Footer />
     </AuthProvider>
