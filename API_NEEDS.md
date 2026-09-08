@@ -39,18 +39,13 @@ Our membership pricing and trainer lists rarely change—maybe once a month—so
 PART D 
 
 Needs Statements
-1. FundiLink needs to read a booking's escrow status — specifically the transition to released — in order to detect the exact moment a tenant has moved in and trigger a "need a fundi?" service prompt.
-Freshness: Near real-time. A delay of even a day defeats the purpose — the value is offering help right when the tenant actually needs it.
-Volume: Low. This only fires once per booking, at the point escrow releases.
-Auth: Yes. This is tied to a specific tenant and booking, so it should require authenticated access, not be publicly queryable.
-2. FundiLink needs to read the location (area, city) of a listing tied to a released booking in order to match and recommend nearby verified fundis to that tenant.
-Freshness: Low — location doesn't change once a listing exists. Fetch-on-demand is fine.
-Volume: Could be moderate if this powers a widget shown on multiple screens, but caching is realistic since the underlying data changes rarely.
-Auth: Not sensitive on its own (general area, not a home address), so this likely doesn't need authentication.
-3. FundiLink needs to read a listing's current status (available / pending / rented) in order to avoid recommending fundi services for a property that hasn't actually reached the move-in stage yet.
-Freshness: Should be reasonably current (updated within the hour is fine) — stale data here could mean recommending services too early.
-Volume: Low-to-moderate, likely fetched alongside the booking status check in Statement 1.
-Auth: Not sensitive — general listing status, no reason to restrict.
+1. FundiLink needs to know when a listing's status flips from "rented" back to "available" — a turnover — because that's the moment a unit reliably needs cleaning and repair before the next tenant moves in.
+2. FundiLink needs to know when a brand-new listing goes live, in order to offer staging, touch-up painting, or deep cleaning before the landlord's first showing
+3. FundiLink needs read access to a landlord's contact information, but only for landlords who have explicitly opted in to being contacted by service partners. Landlords who own multiple units are repeat customers for the same turnover job, which is worth more to FundiLink than a one-off tenant lead
+4. FundiLink needs to read bookings that end in a refund, along with a general refund reason category, because a refund tied to "property didn't match the listing" often points to something genuinely broken that needs fixing before the unit can be re-rented.
+5. FundiLink needs the location (area, city) and size (bedrooms, bathrooms) of a listing tied to any of the above signals, in order to match the right nearby fundi and roughly scope the job before making contact.
+6. FundiLink needs the location (area, city) and size (bedrooms, bathrooms) of a listing tied to any of the above signals, in order to match the right nearby fundi and roughly scope the job before making contact.
+7. NyumbaHub needs to send FundiLink a fundi service request the moment a tenant or landlord confirms a service prompt (e.g. "Book Move-in Cleaning") in our app, so FundiLink can open a job without anyone re-entering details on FundiLink's own app.
 
 PART E
 
