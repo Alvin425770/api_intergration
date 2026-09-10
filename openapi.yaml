@@ -1,0 +1,156 @@
+openapi: 3.0.0
+info:
+  title: NyumbaHub API
+  version: 1.0.0
+paths:
+  /listings:
+    get:
+      summary: Get listings filtered by status and update time
+      description: Returns listings that changed status (e.g. became available) since a given timestamp, tagged with a reason (vacated vs. newly_listed).
+      parameters:
+        - name: status
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [available]
+        - name: updatedSince
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: A list of matching listings
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                    status:
+                      type: string
+                    reason:
+                      type: string
+                      enum: [vacated, newly_listed]
+                    updatedAt:
+                      type: string
+                      format: date-time
+
+  /listings/{id}/landlord-contact:
+    get:
+      summary: Get a landlord's contact info, if opted in
+      description: Returns landlord contact details only if the landlord has opted in to being contacted by service partners. Returns "not available" otherwise.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Contact info if opted in, or a not-available response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  available:
+                    type: boolean
+                  contact:
+                    type: object
+                    nullable: true
+                    properties:
+                      name:
+                        type: string
+                      phone:
+                        type: string
+                      email:
+                        type: string
+
+  /listings/{id}/location:
+    get:
+      summary: Get a listing's area/city
+      description: Lightweight, cacheable endpoint returning just the general area/city of a listing.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The listing's area/city
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  area:
+                    type: string
+                  city:
+                    type: string
+
+  /listings/{id}/size:
+    get:
+      summary: Get a listing's bedroom/bathroom counts
+      description: Returns bedroom and bathroom counts for a listing, to help scope a job before contact.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Bedroom and bathroom counts
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  bedrooms:
+                    type: integer
+                  bathrooms:
+                    type: integer
+
+  /bookings:
+    get:
+      summary: Get bookings filtered by status and update time
+      description: Returns bookings that ended in a refund since a given timestamp, tagged with a general refund reason category (not the original complaint text).
+      parameters:
+        - name: status
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [refunded]
+        - name: updatedSince
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: A list of matching bookings
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                    status:
+                      type: string
+                    reasonCategory:
+                      type: string
+                      enum: [property_mismatch, other]
+                    updatedAt:
+                      type: string
