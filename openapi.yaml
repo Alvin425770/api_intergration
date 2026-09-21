@@ -154,3 +154,25 @@ paths:
                       enum: [property_mismatch, other]
                     updatedAt:
                       type: string
+  /bookings/{id}/escrow-status:
+    get:
+      summary: Get a booking's current escrow status
+      description: Returns the current escrow status of a single booking, so FundiLink can detect the "released" transition as a lightweight move-in touchpoint.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The booking's escrow status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  escrowStatus:
+                    type: string
+        '404':
+          description: Booking not found
