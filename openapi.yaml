@@ -1,127 +1,121 @@
 openapi: 3.0.0
 info:
-  title: NyumbaHub API
+  title: NyumbaHub API (FundiLink Integration)
   version: 1.0.0
+  description: >
+    Endpoints NyumbaHub exposes to FundiLink, per Week 3's ENDPOINT_LIST.md
+    (Group 10). Six read endpoints live on NyumbaHub's own API and are fully
+    specified below. The seventh entry, POST /fundi-requests, is included for
+    completeness because it appears in ENDPOINT_LIST.md, but it is hosted on
+    FundiLink's API, not ours — NyumbaHub is the *caller* of that endpoint,
+    not the server. See the `x-hosted-by` field on that path for detail.
+
+servers:
+  - url: https://api.nyumbahub.com/v1
+    description: NyumbaHub production API (hosts all GET endpoints below)
+
 paths:
   /listings:
     get:
-      summary: Get listings filtered by status and update time
-      description: Returns listings that changed status (e.g. became available) since a given timestamp, tagged with a reason (vacated vs. newly_listed).
+      summary: List listings that just transitioned to "available" (vacated or newly listed)
       parameters:
         - name: status
           in: query
           required: true
+          description: Filter to listings currently in this status. Only "available" is supported for this integration.
           schema:
             type: string
             enum: [available]
+            example: available
         - name: updatedSince
           in: query
           required: true
+          description: Only return listings whose status changed at or after this timestamp.
           schema:
             type: string
             format: date-time
+            example: "2026-09-01T06:00:00Z"
       responses:
         '200':
-          description: A list of matching listings
+          description: Listings that became available since updatedSince, tagged with why.
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  type: object
-                  properties:
-                    id:
-                      type: string
-                    status:
-                      type: string
-                    reason:
-                      type: string
-                      enum: [vacated, newly_listed]
-                    updatedAt:
-                      type: string
-                      format: date-time
+                type: object
+                required: [listings]
+                properties:
+                  listings:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AvailableListing'
+              example:
+                listings:
+                  - id: "lst_8841"
+                    status: "available"
+                    reason: "vacated"
+                    updatedAt: "2026-09-01T07:12:00Z"
+                  - id: "lst_9002"
+                    status: "available"
+                    reason: "newly_listed"
+                    updatedAt: "2026-09-01T08:45:00Z"
+        '400':
+          description: Missing or invalid query parameters (e.g. status not "available", or updatedSince not a valid timestamp).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                code: "invalid_query_param"
+                message: "updatedSince must be an ISO-8601 timestamp"
 
   /listings/{id}/landlord-contact:
     get:
-      summary: Get a landlord's contact info, if opted in
-      description: Returns landlord contact details only if the landlord has opted in to being contacted by service partners. Returns "not available" otherwise.
+      summary: Get a listing's landlord contact info, only if the landlord has opted in
       parameters:
         - name: id
           in: path
           required: true
+          description: The listing ID.
           schema:
             type: string
+            example: "lst_8841"
       responses:
         '200':
-          description: Contact info if opted in, or a not-available response
+          description: >
+            Always 200 whether or not contact info is available, by design —
+            this endpoint fails closed and never signals via status code
+            whether an opt-in flag exists on the landlord's account.
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  available:
-                    type: boolean
-                  contact:
-                    type: object
-                    nullable: true
-                    properties:
-                      name:
-                        type: string
-                      phone:
-                        type: string
-                      email:
-                        type: string
-
-  /listings/{id}/location:
-    get:
-      summary: Get a listing's area/city
-      description: Lightweight, cacheable endpoint returning just the general area/city of a listing.
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          description: The listing's area/city
+                $ref: '#/components/schemas/LandlordContactResponse'
+              examples:
+                optedIn:
+                  summary: Landlord has opted in
+                  value:
+                    available: true
+                    contact:
+                      name: "Grace Wanjiru"
+                      phone: "+254712345678"
+                      email: "grace.w@example.com"
+                optedOut:
+                  summary: Landlord has not opted in (or listing/landlord unknown)
+                  value:
+                    available: false
+                    contact: null
+        '404':
+          description: Listing ID does not exist.
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  area:
-                    type: string
-                  city:
-                    type: string
-
-  /listings/{id}/size:
-    get:
-      summary: Get a listing's bedroom/bathroom counts
-      description: Returns bedroom and bathroom counts for a listing, to help scope a job before contact.
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          description: Bedroom and bathroom counts
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  bedrooms:
-                    type: integer
-                  bathrooms:
-                    type: integer
+                $ref: '#/components/schemas/Error'
+              example:
+                code: "listing_not_found"
+                message: "No listing with id lst_8841"
 
   /bookings:
     get:
-      summary: Get bookings filtered by status and update time
-      description: Returns bookings that ended in a refund since a given timestamp, tagged with a general refund reason category (not the original complaint text).
+      summary: List bookings that ended in a refund since a given timestamp
       parameters:
         - name: status
           in: query
@@ -129,28 +123,328 @@ paths:
           schema:
             type: string
             enum: [refunded]
+            example: refunded
         - name: updatedSince
           in: query
           required: true
           schema:
             type: string
             format: date-time
+            example: "2026-09-01T00:00:00Z"
       responses:
         '200':
-          description: A list of matching bookings
+          description: Refunded bookings since updatedSince, with a general reason category (never the raw complaint text).
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  type: object
-                  properties:
-                    id:
-                      type: string
-                    status:
-                      type: string
-                    reasonCategory:
-                      type: string
-                      enum: [property_mismatch, other]
-                    updatedAt:
-                      type: string
+                type: object
+                required: [bookings]
+                properties:
+                  bookings:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/RefundedBooking'
+              example:
+                bookings:
+                  - id: "bkg_5521"
+                    listingId: "lst_8841"
+                    status: "refunded"
+                    refundReasonCategory: "property_mismatch"
+                    updatedAt: "2026-09-01T09:30:00Z"
+        '400':
+          description: Missing or invalid query parameters.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /listings/{id}/location:
+    get:
+      summary: Get a listing's area and city (lightweight, cacheable)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            example: "lst_8841"
+      responses:
+        '200':
+          description: The listing's area and city.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListingLocation'
+              example:
+                area: "Kilimani"
+                city: "Nairobi"
+        '404':
+          description: Listing ID does not exist.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /listings/{id}/size:
+    get:
+      summary: Get a listing's bedroom and bathroom counts
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            example: "lst_8841"
+      responses:
+        '200':
+          description: Bedroom and bathroom counts, for scoping a job.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListingSize'
+              example:
+                bedrooms: 2
+                bathrooms: 1
+        '404':
+          description: Listing ID does not exist.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /bookings/{id}/escrow-status:
+    get:
+      summary: Get the current escrow status of a single booking
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            example: "bkg_5521"
+      responses:
+        '200':
+          description: The booking's current escrow status.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EscrowStatus'
+              example:
+                bookingId: "bkg_5521"
+                escrowStatus: "released"
+                updatedAt: "2026-09-02T10:00:00Z"
+        '404':
+          description: Booking ID does not exist.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /fundi-requests:
+    x-hosted-by: FundiLink
+    post:
+      summary: >
+        (External — hosted on FundiLink's API, not NyumbaHub's) Create a fundi
+        job request when a tenant/landlord confirms a service prompt.
+        Documented here only because it appears in ENDPOINT_LIST.md as the one
+        NyumbaHub → FundiLink call; NyumbaHub is the caller, FundiLink is the server.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FundiRequestCreate'
+            example:
+              bookingId: "bkg_5521"
+              listingId: "lst_8841"
+              serviceType: "move_in_cleaning"
+      responses:
+        '201':
+          description: Fundi job request created on FundiLink's side.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FundiRequestCreated'
+              example:
+                id: "req_3391"
+                bookingId: "bkg_5521"
+                listingId: "lst_8841"
+                serviceType: "move_in_cleaning"
+                status: "pending"
+                createdAt: "2026-09-02T10:05:00Z"
+        '400':
+          description: Malformed request (e.g. missing bookingId or listingId).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+components:
+  schemas:
+    AvailableListing:
+      type: object
+      required: [id, status, reason, updatedAt]
+      properties:
+        id:
+          type: string
+          example: "lst_8841"
+        status:
+          type: string
+          enum: [available]
+          example: "available"
+        reason:
+          type: string
+          description: Why this listing just became available.
+          enum: [vacated, newly_listed]
+          example: "vacated"
+        updatedAt:
+          type: string
+          format: date-time
+          example: "2026-09-01T07:12:00Z"
+
+    LandlordContactResponse:
+      type: object
+      required: [available]
+      properties:
+        available:
+          type: boolean
+          description: Whether the landlord has opted in to being contacted by service partners.
+          example: true
+        contact:
+          description: Present only when available is true; null otherwise.
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/LandlordContact'
+
+    LandlordContact:
+      type: object
+      required: [name, phone]
+      properties:
+        name:
+          type: string
+          example: "Grace Wanjiru"
+        phone:
+          type: string
+          example: "+254712345678"
+        email:
+          type: string
+          format: email
+          nullable: true
+          example: "grace.w@example.com"
+
+    RefundedBooking:
+      type: object
+      required: [id, listingId, status, refundReasonCategory, updatedAt]
+      properties:
+        id:
+          type: string
+          example: "bkg_5521"
+        listingId:
+          type: string
+          example: "lst_8841"
+        status:
+          type: string
+          enum: [refunded]
+          example: "refunded"
+        refundReasonCategory:
+          type: string
+          description: General category only — never the tenant's original complaint text.
+          enum: [property_mismatch, cancellation, other]
+          example: "property_mismatch"
+        updatedAt:
+          type: string
+          format: date-time
+          example: "2026-09-01T09:30:00Z"
+
+    ListingLocation:
+      type: object
+      required: [area, city]
+      properties:
+        area:
+          type: string
+          example: "Kilimani"
+        city:
+          type: string
+          example: "Nairobi"
+
+    ListingSize:
+      type: object
+      required: [bedrooms, bathrooms]
+      properties:
+        bedrooms:
+          type: integer
+          minimum: 0
+          example: 2
+        bathrooms:
+          type: integer
+          minimum: 0
+          example: 1
+
+    EscrowStatus:
+      type: object
+      required: [bookingId, escrowStatus, updatedAt]
+      properties:
+        bookingId:
+          type: string
+          example: "bkg_5521"
+        escrowStatus:
+          type: string
+          enum: [held, released, disputed]
+          example: "released"
+        updatedAt:
+          type: string
+          format: date-time
+          example: "2026-09-02T10:00:00Z"
+
+    FundiRequestCreate:
+      type: object
+      required: [bookingId, listingId, serviceType]
+      properties:
+        bookingId:
+          type: string
+          description: NyumbaHub's internal booking ID for the confirmed service.
+          example: "bkg_5521"
+        listingId:
+          type: string
+          description: NyumbaHub's internal listing ID.
+          example: "lst_8841"
+        serviceType:
+          type: string
+          enum: [move_in_cleaning, repair, inspection]
+          example: "move_in_cleaning"
+
+    FundiRequestCreated:
+      type: object
+      required: [id, bookingId, listingId, serviceType, status, createdAt]
+      properties:
+        id:
+          type: string
+          example: "req_3391"
+        bookingId:
+          type: string
+          example: "bkg_5521"
+        listingId:
+          type: string
+          example: "lst_8841"
+        serviceType:
+          type: string
+          example: "move_in_cleaning"
+        status:
+          type: string
+          enum: [pending, accepted, rejected]
+          example: "pending"
+        createdAt:
+          type: string
+          format: date-time
+          example: "2026-09-02T10:05:00Z"
+
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          example: "listing_not_found"
+        message:
+          type: string
+          example: "No listing with id lst_8841"
