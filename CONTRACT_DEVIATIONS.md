@@ -1,3 +1,8 @@
+# GROUP 10
+# Mwanyumba Alvin
+# Jeremy Gichohi
+# Michael Otunga
+# Peacemary Njeri
 # Contract Deviations - Week 5
 
 ## Change: Added `/bookings/{id}/escrow-status`
@@ -11,3 +16,5 @@
 ## All other endpoints
 
 No other deviations. All other GET endpoints (`/listings`, `/listings/{id}/landlord-contact`, `/listings/{id}/location`, `/listings/{id}/size`, `/bookings`) were implemented and verified against the original Week 4 contract with no drift - field names, types, and status codes all matched as written.
+
+No deviations in POST endpoints.
