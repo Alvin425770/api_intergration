@@ -15,6 +15,12 @@ app.get('/', (req, res) => {
 const studentRoutes = require('./routes/students');
 app.use('/api/students', studentRoutes);
 
+const listingRoutes = require('./routes/listings');
+app.use('/listings', listingRoutes);
+
+const bookingRoutes = require('./routes/bookings');
+app.use('/bookings', bookingRoutes);
+
 app.listen(port, () => {
   console.log(`Server is running on http://localhost:${port}`);
 });
