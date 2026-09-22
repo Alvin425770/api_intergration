@@ -7,10 +7,16 @@ router.get('/', async (req, res) => {
   const { status, updatedSince } = req.query;
 
   if (!status || !updatedSince) {
-    return res.status(400).json({ error: 'status and updatedSince are required query parameters' });
+    return res.status(400).json({
+      code: 'invalid_query_param',
+      message: 'status and updatedSince are required query parameters'
+    });
   }
   if (status !== 'available') {
-    return res.status(400).json({ error: 'status must be "available"' });
+    return res.status(400).json({
+      code: 'invalid_query_param',
+      message: 'status must be "available"'
+    });
   }
 
   try {
@@ -19,17 +25,17 @@ router.get('/', async (req, res) => {
       [status, updatedSince]
     );
 
-    const shaped = rows.map(row => ({
+    const listings = rows.map(row => ({
       id: String(row.id),
       status: row.status,
       reason: row.previous_status === 'rented' ? 'vacated' : 'newly_listed',
       updatedAt: new Date(row.updated_at).toISOString()
     }));
 
-    res.status(200).json(shaped);
+    res.status(200).json({ listings });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Failed to fetch listings' });
+    res.status(500).json({ code: 'internal_error', message: 'Failed to fetch listings' });
   }
 });
 
@@ -40,7 +46,10 @@ router.get('/:id/landlord-contact', async (req, res) => {
   try {
     const [listingRows] = await db.query('SELECT id FROM listings WHERE id = ?', [id]);
     if (listingRows.length === 0) {
-      return res.status(404).json({ error: 'Listing not found' });
+      return res.status(404).json({
+        code: 'listing_not_found',
+        message: `No listing with id ${id}`
+      });
     }
 
     const [landlordRows] = await db.query(
@@ -59,12 +68,12 @@ router.get('/:id/landlord-contact', async (req, res) => {
       contact: {
         name: landlord.name,
         phone: landlord.phone,
-        email: landlord.email
+        email: landlord.email ?? null
       }
     });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Failed to fetch landlord contact' });
+    res.status(500).json({ code: 'internal_error', message: 'Failed to fetch landlord contact' });
   }
 });
 
@@ -74,12 +83,15 @@ router.get('/:id/location', async (req, res) => {
   try {
     const [rows] = await db.query('SELECT area, city FROM listings WHERE id = ?', [id]);
     if (rows.length === 0) {
-      return res.status(404).json({ error: 'Listing not found' });
+      return res.status(404).json({
+        code: 'listing_not_found',
+        message: `No listing with id ${id}`
+      });
     }
     res.status(200).json({ area: rows[0].area, city: rows[0].city });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Failed to fetch listing location' });
+    res.status(500).json({ code: 'internal_error', message: 'Failed to fetch listing location' });
   }
 });
 
@@ -89,12 +101,15 @@ router.get('/:id/size', async (req, res) => {
   try {
     const [rows] = await db.query('SELECT bedrooms, bathrooms FROM listings WHERE id = ?', [id]);
     if (rows.length === 0) {
-      return res.status(404).json({ error: 'Listing not found' });
+      return res.status(404).json({
+        code: 'listing_not_found',
+        message: `No listing with id ${id}`
+      });
     }
     res.status(200).json({ bedrooms: rows[0].bedrooms, bathrooms: rows[0].bathrooms });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Failed to fetch listing size' });
+    res.status(500).json({ code: 'internal_error', message: 'Failed to fetch listing size' });
   }
 });
 
