@@ -1,210 +1,337 @@
-# NyumbaHub — Project Documentation
+# NyumbaHub API
 
-**Last updated:** August 2026
-**Purpose of this document:** onboard a new team quickly, and serve as the single source of truth going into the November 13 competition submission.
+## Overview
 
----
+NyumbaHub is a house-hunting platform for Kenya. This REST API serves property listings, booking and escrow status, landlord contact details and student records to the NyumbaHub web app. It is for developers building or testing against NyumbaHub: frontend contributors, API testers and anyone integrating with listing or booking data.
 
-## 1. What NyumbaHub Is
+- **Base URL (local):** `http://localhost:5000`
+- **Format:** responses are JSON, except the health check, which is plain text. Send request bodies as JSON with `Content-Type: application/json`.
+- **Full reference docs:** open `docs/index.html` in a browser.
 
-NyumbaHub is a house-hunting platform for Kenya. The core problem it solves: house hunting is disorganized, and people get scammed when trying to rent — they pay deposits to landlords or agents who ghost them, or the listing turns out not to exist.
+## Quickstart (one command)
 
-**The core idea (unfair advantage):** rent/booking payments go through M-Pesa into an **escrow** system. The landlord doesn't receive funds immediately — money is held until the tenant confirms the property matches what was listed (after a viewing). If it doesn't check out, the tenant is refunded.
+Make sure the API is running (see [Run it locally](#run-it-locally)), then open a second terminal and run:
 
-**Target users:** people looking for houses to rent (with university students called out specifically as an early-adopter segment) and landlords/property owners listing units.
+```
+curl "http://localhost:5000/listings?status=available&updatedSince=2026-01-01"
+```
 
-**Revenue model:** premium placement for landlords listing houses, plus commission on successful rentals.
+> **Windows PowerShell users:** type `curl.exe` instead of `curl` (plain `curl` is a different command in PowerShell). Do this for every example below.
 
----
+You should get back `200` and:
 
-## 2. Tech Stack
+```json
+{
+  "listings": [
+    { "id": "1", "status": "available", "reason": "vacated", "updatedAt": "2026-09-21T19:54:06.000Z" },
+    { "id": "2", "status": "available", "reason": "newly_listed", "updatedAt": "2026-09-21T19:54:06.000Z" }
+  ]
+}
+```
 
-- **Frontend:** React (via Vite), plain CSS (no Tailwind, no CSS framework — this is intentional, see Section 5)
-- **Routing:** React Router (`react-router-dom`)
-- **State/Auth:** React Context (`AuthContext.jsx`) — currently client-side only, no real backend yet
-- **Data:** `src/mock-data.js` — hardcoded sample data standing in for a future database
-- **Payments:** M-Pesa flow is **simulated** — there is no real Safaricom Daraja API integration yet (see Section 7)
+Those two listings are sample data from `server/schema.sql`. Timestamps are produced from your machine's timezone, so the hour may differ on your computer.
 
-**Not yet decided/built:** backend/database, real authentication, real M-Pesa integration, image hosting.
+## Authentication
 
----
+None yet. You do **not** need a token or API key: send requests exactly as shown below. Real authentication is planned for Week 9; this section will change then.
 
-## 3. Getting Started
+## Endpoints
 
-```bash
-git clone <repo-url>
-cd nyumbahub
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/` | Health check |
+| GET | `/listings` | Available listings updated since a date |
+| GET | `/listings/{id}/landlord-contact` | Landlord contact (only if opted in) |
+| GET | `/listings/{id}/location` | Area and city |
+| GET | `/listings/{id}/size` | Bedrooms and bathrooms |
+| GET | `/bookings` | Refunded bookings updated since a date |
+| GET | `/bookings/{id}/escrow-status` | Escrow status of a booking |
+| GET | `/api/students` | List students |
+| POST | `/api/students` | Create a student |
+| PUT | `/api/students/{id}` | Update a student |
+| DELETE | `/api/students/{id}` | Delete a student |
+
+Note that student routes start with `/api`, but listings and bookings do not.
+
+### Health check: `GET /`
+
+```
+curl http://localhost:5000/
+```
+
+Response `200` (plain text):
+
+```
+API is running
+```
+
+### List available listings: `GET /listings`
+
+Both query parameters are required. `status` must be exactly `available`. `updatedSince` is a date such as `2026-01-01`; listings updated on or after it are returned. `reason` is `vacated` if the listing was previously rented, otherwise `newly_listed`.
+
+```
+curl "http://localhost:5000/listings?status=available&updatedSince=2026-01-01"
+```
+
+Response `200`: see the quickstart above.
+
+### Get landlord contact: `GET /listings/{id}/landlord-contact`
+
+Returns contact details only if the landlord has opted in.
+
+```
+curl http://localhost:5000/listings/1/landlord-contact
+```
+
+Response `200`:
+
+```json
+{
+  "available": true,
+  "contact": { "name": "Jane Wanjiru", "phone": "0722000001", "email": "jane@example.com" }
+}
+```
+
+If the landlord has not opted in (try listing `2`), you still get `200`:
+
+```json
+{ "available": false, "contact": null }
+```
+
+### Get listing location: `GET /listings/{id}/location`
+
+```
+curl http://localhost:5000/listings/1/location
+```
+
+Response `200`:
+
+```json
+{ "area": "Kilimani", "city": "Nairobi" }
+```
+
+### Get listing size: `GET /listings/{id}/size`
+
+```
+curl http://localhost:5000/listings/1/size
+```
+
+Response `200`:
+
+```json
+{ "bedrooms": 2, "bathrooms": 1 }
+```
+
+### List refunded bookings: `GET /bookings`
+
+Both query parameters are required. `status` must be exactly `refunded`.
+
+```
+curl "http://localhost:5000/bookings?status=refunded&updatedSince=2026-01-01"
+```
+
+Response `200`:
+
+```json
+{
+  "bookings": [
+    {
+      "id": "1",
+      "listingId": "3",
+      "status": "refunded",
+      "refundReasonCategory": "property_mismatch",
+      "updatedAt": "2026-09-21T19:54:07.000Z"
+    }
+  ]
+}
+```
+
+### Get booking escrow status: `GET /bookings/{id}/escrow-status`
+
+```
+curl http://localhost:5000/bookings/1/escrow-status
+```
+
+Response `200`:
+
+```json
+{ "bookingId": "1", "escrowStatus": "released", "updatedAt": "2026-09-21T19:54:07.000Z" }
+```
+
+Booking `2` returns `"escrowStatus": "held"`.
+
+> Payments and escrow are simulated in NyumbaHub. These endpoints only read stored records; they do not move money.
+
+### List students: `GET /api/students`
+
+```
+curl http://localhost:5000/api/students
+```
+
+Response `200`: a plain array (not wrapped in an object). The sample data has 8 students; the first two are:
+
+```json
+[
+  { "id": 1, "name": "David Kariuki", "email": "david.kariuki@strathmore.edu", "course": "Business Information Technology" },
+  { "id": 2, "name": "Faith Mumbi", "email": "faith.mumbi@strathmore.edu", "course": "Computer Science" }
+]
+```
+
+### Create a student: `POST /api/students`
+
+Body fields `name`, `email` and `course` are all required.
+
+macOS, Linux or Command Prompt:
+
+```
+curl -X POST http://localhost:5000/api/students -H "Content-Type: application/json" -d "{\"name\":\"Amina Hassan\",\"email\":\"amina.hassan@strathmore.edu\",\"course\":\"Computer Science\"}"
+```
+
+Windows PowerShell (PowerShell mangles quotes inside `curl.exe` bodies, so use this instead):
+
+```
+Invoke-RestMethod -Method Post -Uri http://localhost:5000/api/students -ContentType "application/json" -Body '{"name":"Amina Hassan","email":"amina.hassan@strathmore.edu","course":"Computer Science"}' | ConvertTo-Json
+```
+
+Response `201 Created`:
+
+```json
+{ "id": 10, "name": "Amina Hassan", "email": "amina.hassan@strathmore.edu", "course": "Computer Science" }
+```
+
+Save the `id`; yours may differ if you have created students before.
+
+### Update a student: `PUT /api/students/{id}`
+
+Send all three fields. Replace `10` with the `id` you just got.
+
+macOS, Linux or Command Prompt:
+
+```
+curl -X PUT http://localhost:5000/api/students/10 -H "Content-Type: application/json" -d "{\"name\":\"Amina Hassan\",\"email\":\"amina.hassan@strathmore.edu\",\"course\":\"Software Engineering\"}"
+```
+
+Windows PowerShell:
+
+```
+Invoke-RestMethod -Method Put -Uri http://localhost:5000/api/students/10 -ContentType "application/json" -Body '{"name":"Amina Hassan","email":"amina.hassan@strathmore.edu","course":"Software Engineering"}' | ConvertTo-Json
+```
+
+Response `200`:
+
+```json
+{ "id": "10", "name": "Amina Hassan", "email": "amina.hassan@strathmore.edu", "course": "Software Engineering" }
+```
+
+The `id` comes back as a string here. This route does not check that the student exists: updating an `id` that does not exist still returns `200` and changes nothing.
+
+### Delete a student: `DELETE /api/students/{id}`
+
+```
+curl -X DELETE http://localhost:5000/api/students/10
+```
+
+Response `200`:
+
+```json
+{ "message": "Student deleted" }
+```
+
+Use the `id` you got from the create call (replace `10` if yours was different). Deleting an `id` that does not exist also returns `200` with this same message.
+
+## Errors
+
+Failed requests return an HTTP error status plus a small JSON body. There are **two shapes**, depending on which part of the API you called.
+
+| Part of the API | Body shape |
+|---|---|
+| `/listings`, `/bookings` | `{ "code": "...", "message": "..." }` |
+| `/api/students` | `{ "error": "..." }` |
+
+Real examples:
+
+`GET /listings?status=available` (missing `updatedSince`) → `400`
+```json
+{ "code": "invalid_query_param", "message": "status and updatedSince are required query parameters" }
+```
+
+`GET /listings?status=rented&updatedSince=2026-01-01` → `400`
+```json
+{ "code": "invalid_query_param", "message": "status must be \"available\"" }
+```
+
+`GET /bookings?status=confirmed&updatedSince=2026-01-01` → `400`
+```json
+{ "code": "invalid_query_param", "message": "status must be \"refunded\"" }
+```
+
+`GET /listings/9999/location` (also `/size` and `/landlord-contact`) → `404`
+```json
+{ "code": "listing_not_found", "message": "No listing with id 9999" }
+```
+
+`GET /bookings/9999/escrow-status` → `404`
+```json
+{ "code": "booking_not_found", "message": "No booking with id 9999" }
+```
+
+`POST /api/students` with a missing field → `400`
+```json
+{ "error": "name, email, and course are required" }
+```
+
+`GET /listings?status=available&updatedSince=banana` (a value that is not a date) → `500`
+```json
+{ "code": "internal_error", "message": "Failed to fetch listings" }
+```
+
+A request body that is not valid JSON (usually a shell quoting problem) → `400` with an **HTML error page**, not JSON. If you see HTML instead of JSON, check your quotes; in PowerShell use the `Invoke-RestMethod` examples above.
+
+Any unexpected database failure returns `500` (for example `{ "code": "internal_error", "message": "Failed to fetch listings" }`). If you see a `500` on every request, check your database settings in `server/.env`.
+
+## Run it locally
+
+You need:
+
+1. **Node.js 18 or newer** (check with `node -v`).
+2. **MySQL 8** (or MariaDB, as bundled with XAMPP) running on port 3306.
+3. **Git.**
+
+Run these commands one at a time:
+
+```
+git clone https://github.com/Alvin425770/api_intergration.git
+cd api_intergration/server
 npm install
+```
+
+Create your settings file by copying the example, then open `.env` and put in your own MySQL password:
+
+```
+copy .env.example .env      (Windows)
+cp .env.example .env        (macOS / Linux)
+```
+
+Create the database and load the sample data in one step (enter your MySQL password when asked):
+
+```
+mysql -u root -p -e "source schema.sql"
+```
+
+(This form works in Command Prompt, PowerShell and macOS/Linux terminals. The shorter `mysql -u root -p < schema.sql` does not work in PowerShell.)
+
+Start the API:
+
+```
 npm run dev
 ```
 
-Opens at `http://localhost:5173`.
+Leave that terminal open. Then check it is alive: open <http://localhost:5000/> in a browser. You should see `API is running`. Then run the quickstart command above.
 
-**Branching model:** work on your own branch (`git checkout -b feature/yourname`), never push directly to `master`. Open a Pull Request into `master` when ready. `master` should always be in a demoable state.
+Re-run the `schema.sql` import any time to reset the sample data. `npm start` also works if you do not want auto-restart.
 
----
+Settings in `server/.env`: `DB_HOST`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` (use `students_db`), `DB_PORT` (usually `3306`) and optionally `PORT` (the API port, default `5000`).
 
-## 4. Project Structure
+## Limitations
 
-```
-nyumbahub/
-├── src/
-│   ├── components/
-│   │   ├── Navbar.jsx / .css
-│   │   ├── Footer.jsx / .css
-│   │   ├── ListingCard.jsx / .css
-│   │   └── SearchBar.jsx / .css
-│   ├── pages/
-│   │   ├── Home.jsx / .css
-│   │   ├── Listings.jsx / .css
-│   │   ├── ListingDetail.jsx / .css
-│   │   ├── Login.jsx        (uses ../styles/auth.css)
-│   │   ├── Dashboard.jsx    (uses ../styles/auth.css)
-│   │   └── BookingDetail.jsx / .css
-│   ├── context/
-│   │   └── AuthContext.jsx  — login/register/logout, current user state
-│   ├── styles/
-│   │   └── auth.css         — shared styling for Login + Dashboard
-│   ├── ProtectedRoute.jsx   — route guard component
-│   ├── mock-data.js         — sample users, listings, bookings
-│   ├── index.css            — design tokens (colors, fonts) — see Section 5
-│   ├── App.jsx              — routes
-│   └── main.jsx             — app entry point
-```
-
----
-
-## 5. Design System
-
-The visual direction is called **"Terracotta & Stone" / Editorial Minimalism** — deliberately closer to an architecture/lifestyle magazine than a typical tech startup look. High-trust, grounded, not "bubbly."
-
-**All colors and fonts are defined as CSS variables in `src/index.css`.** Every component should use these variables, never hardcoded hex values or font names, so the whole site stays visually consistent.
-
-```css
---primary: #000101;         /* deep charcoal — primary buttons, footer bg, headings */
---on-primary: #ffffff;
---secondary: #5e5e5b;        /* used for image placeholder backgrounds */
---tertiary: #c86a43;         /* terracotta accent — CTAs, highlights, active states */
---background: #fcf9f5;       /* warm cream — page background */
---surface: #ffffff;          /* card backgrounds */
---on-surface: #1c1c1a;       /* primary text */
---on-surface-variant: #44474a; /* secondary/muted text */
---outline-variant: #c5c6ca;  /* borders */
---error: #ba1a1a;
-
---font-display: 'Libre Caslon Text', Georgia, serif;   /* all headings */
---font-body: 'Manrope', -apple-system, sans-serif;      /* body text, buttons, labels */
-```
-
-**Conventions to keep:**
-- Headings use `var(--font-display)`, everything else uses `var(--font-body)`
-- Buttons/labels: uppercase, `letter-spacing: 0.05em`, `font-weight: 600`, small (~13px)
-- Borders over shadows — avoid heavy `box-shadow`; use thin `1px solid var(--outline-variant)` borders instead. When a shadow is needed, keep it large-blur and very low-opacity (e.g. `0 40px 80px -20px rgba(0,0,0,0.08)`)
-- Border-radius: `4px` on buttons/inputs, `8px` on cards/images — never fully rounded/pill-shaped
-- Property/listing photos use a `4:5` aspect ratio in cards, `3:2` for hero/wide images
-- Responsive breakpoint used throughout: `@media (max-width: 900px)`
-
-**⚠️ Important — do not install Tailwind CSS.** Early in the project, code was contributed using Tailwind utility classes, which silently did nothing since Tailwind was never configured in this project. All such code has been rewritten in plain CSS matching the system above. Keep it that way — adding Tailwind at this point would require a full rebuild of every component's styling to avoid conflicts with the existing plain CSS.
-
----
-
-## 6. Data Model
-
-All mock data in `src/mock-data.js` follows this shape. If real backend/database work begins, these are the shapes the API should return.
-
-### User
-```js
-{
-  id: "usr_001",
-  role: "tenant" | "landlord",
-  fullName: "...",
-  email: "...",
-  phone: "+254...",
-  // tenant only:
-  savedListings: ["lst_id", ...],
-  // landlord only:
-  verified: false,
-  listingIds: ["lst_id", ...],
-}
-```
-
-### Listing
-```js
-{
-  id: "lst_014",
-  landlordId: "usr_009",
-  title: "...",
-  description: "...",
-  location: { area: "...", city: "...", lat: 0, lng: 0 },
-  rentAmount: 45000,        // KES, whole numbers only
-  bedrooms: 2,
-  bathrooms: 2,
-  images: [],                // URLs — never store raw image data
-  amenities: [],
-  status: "available" | "pending" | "rented",
-  isVerified: false,
-}
-```
-
-### Booking
-```js
-{
-  id: "bkg_101",
-  listingId: "lst_014",
-  tenantId: "usr_001",
-  landlordId: "usr_009",
-  amount: 1000,               // KES, flat viewing/booking fee
-  mpesaTransactionId: "...",
-  status: "initiated" | "held" | "released" | "refunded",
-}
-```
-
-**Conventions:** IDs are strings prefixed by type (`usr_`, `lst_`, `bkg_`). Dates are ISO strings. Money is whole KES, no decimals.
-
----
-
-## 7. Feature Status — What's Real vs. Simulated
-
-This is the most important section for understanding what's demo-ready vs. what needs real engineering before competition day.
-
-| Feature | Status |
-|---|---|
-| Homepage (hero, how-it-works, featured listings) | ✅ Built, styled, responsive |
-| Browse listings + search/filter | ✅ Built, styled, responsive. Uses mock data |
-| Listing detail page | ✅ Built, styled |
-| Login / Register | ⚠️ UI complete, but **auth is client-side only** — no real backend validation, likely accepts any input. Check `AuthContext.jsx` for exact current logic |
-| Protected routes | ✅ Working — `/booking/:id` and `/dashboard` require login; `/`, `/listings`, `/login` are public |
-| Landlord dashboard — add listing | ⚠️ Works, but **only in local React state** — refreshing the page loses any listing added. No backend persistence |
-| Tenant dashboard | ⚠️ Partially built — "My Bookings" section not yet connected to real booking data |
-| Booking & payment flow | ⚠️ **Fully simulated.** The M-Pesa "STK Push" is a fake countdown timer, not a real Safaricom Daraja API call. No real money moves. Validates form input properly, but the payment itself is fiction |
-| Escrow status tracking | ⚠️ UI/state only — there's no real backend enforcing fund holding or release logic |
-| Image uploads | ❌ Not built — listings currently reference an empty `images: []` array or a solid-color placeholder div |
-| Backend / database | ❌ Does not exist. Everything currently lives in `mock-data.js` and browser memory |
-
-**Bottom line for a new team:** the frontend experience is close to demo-ready and visually polished. The entire backend — real auth, real database, real M-Pesa integration, real escrow logic — does not exist yet. This is the primary work remaining before competition day.
-
----
-
-## 8. Known Gaps / Priorities Before November 13
-
-Roughly in priority order:
-
-1. **Real backend + database.** Needs a decision: Node/Express + a database (MySQL/Postgres/MongoDB), or a BaaS like Firebase/Supabase for speed. This unblocks everything else below.
-2. **Real authentication** — replace `AuthContext.jsx`'s current logic with real user accounts, password hashing, and persistent sessions.
-3. **Persist listings** — landlord-added listings currently vanish on refresh; need to actually save to a database.
-4. **Real M-Pesa Daraja API integration** — replace the simulated STK push. Requires a Safaricom developer account and sandbox testing; this took real lead time even in the original sprint plan, budget time accordingly.
-5. **Image upload/hosting** — likely Cloudinary or similar, so listings can have real photos instead of placeholders.
-6. **Wire "Request to Book" button** on `ListingDetail.jsx` to actually link to `/booking/:id` for that specific listing (last known status: unconfirmed whether this was completed — verify).
-7. **Real escrow logic** — server-side enforcement of the hold/release/refund flow, not just UI state.
-
----
-
-## 9. Design Assets Reference
-
-If continuing the visual direction, the original mood/design reference was generated via Google Stitch and exported as a design token file (colors, type scale, spacing, component rules). If the new team wants to extend the design (new pages, new components), stay consistent with Section 5 above rather than introducing new colors/fonts freehand.
-
----
-
-## 10. Contact / History Note
-
-This project started as a Strathmore University coursework project (Group 9) before being taken forward as a competition submission. Original team: Alvin (lead — architecture, homepage, design system, Git/deployment), MJ (listings/search), Peace (auth/dashboards), Mike (booking/payments — later adapted into the final booking flow to match the design system and real listing data).
+This is an initial backend. Server-side authentication, real M-Pesa (Daraja) payments, server-enforced escrow, and endpoints to create or change listings and bookings are not implemented yet.
