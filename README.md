@@ -10,7 +10,12 @@ NyumbaHub is a house-hunting platform for Kenya. This REST API serves property l
 
 ## Quickstart (one command)
 
-Make sure the API is running (see [Run it locally](#run-it-locally)), then open a second terminal and run:
+Make sure the API is running (see [Run it locally](#run-it-locally)),:
+commands:
+cd server
+node index.js
+
+then open a second terminal and run:
 
 ```
 curl "http://localhost:5000/listings?status=available&updatedSince=2026-01-01"
