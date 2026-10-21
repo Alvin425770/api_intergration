@@ -1,342 +1,315 @@
-# NyumbaHub API
+# NyumbaHub API & FundiLink Integration Guide
 
-## Overview
+## 🌐 Live Base URL
+The API is deployed and accessible 24/7 online for testing and integration:
 
-NyumbaHub is a house-hunting platform for Kenya. This REST API serves property listings, booking and escrow status, landlord contact details and student records to the NyumbaHub web app. It is for developers building or testing against NyumbaHub: frontend contributors, API testers and anyone integrating with listing or booking data.
-
-- **Base URL (local):** `http://localhost:5000`
-- **Format:** responses are JSON, except the health check, which is plain text. Send request bodies as JSON with `Content-Type: application/json`.
-- **Full reference docs:** open `docs/index.html` in a browser.
-
-## Quickstart (one command)
-
-Make sure the API is running (see [Run it locally](#run-it-locally)),:
-commands:
-cd server
-node index.js
-
-then open a second terminal and run:
-
-```
-curl "http://localhost:5000/listings?status=available&updatedSince=2026-01-01"
+```text
+https://nyumbahub-api-gdit.onrender.com
 ```
 
-> **Windows PowerShell users:** type `curl.exe` instead of `curl` (plain `curl` is a different command in PowerShell). Do this for every example below.
+- **Format:** JSON responses (`Content-Type: application/json`), except the root health check which returns plain text.
+- **Authentication:** None required at this stage. You can call all endpoints directly.
+- **Local Fallback:** `http://localhost:5000` (if running locally).
 
-You should get back `200` and:
+---
 
-```json
-{
-  "listings": [
-    { "id": "1", "status": "available", "reason": "vacated", "updatedAt": "2026-09-21T19:54:06.000Z" },
-    { "id": "2", "status": "available", "reason": "newly_listed", "updatedAt": "2026-09-21T19:54:06.000Z" }
-  ]
-}
-```
+## ⚡ Quick Test in Browser (1-Click Verification)
 
-Those two listings are sample data from `server/schema.sql`. Timestamps are produced from your machine's timezone, so the hour may differ on your computer.
+You can click any of these links right in your browser to verify live data immediately:
 
-## Authentication
+| Endpoint | Test Link | Expected Result |
+| :--- | :--- | :--- |
+| **Health Check** | [GET /](https://nyumbahub-api-gdit.onrender.com/) | `"API is running"` |
+| **Available Listings** | [GET /listings?status=available&updatedSince=2026-01-01](https://nyumbahub-api-gdit.onrender.com/listings?status=available&updatedSince=2026-01-01) | List of available properties |
+| **Listing Location** | [GET /listings/1/location](https://nyumbahub-api-gdit.onrender.com/listings/1/location) | Area & city (`Kilimani, Nairobi`) |
+| **Listing Size** | [GET /listings/1/size](https://nyumbahub-api-gdit.onrender.com/listings/1/size) | Bedrooms & bathrooms |
+| **Landlord Contact** | [GET /listings/1/landlord-contact](https://nyumbahub-api-gdit.onrender.com/listings/1/landlord-contact) | Landlord details (Jane Wanjiru) |
+| **Refunded Bookings** | [GET /bookings?status=refunded&updatedSince=2026-01-01](https://nyumbahub-api-gdit.onrender.com/bookings?status=refunded&updatedSince=2026-01-01) | List of refunded bookings |
+| **Escrow Status** | [GET /bookings/1/escrow-status](https://nyumbahub-api-gdit.onrender.com/bookings/1/escrow-status) | Status (`released` or `held`) |
+| **Students List** | [GET /api/students](https://nyumbahub-api-gdit.onrender.com/api/students) | Array of 8 student records |
 
-None yet. You do **not** need a token or API key: send requests exactly as shown below. Real authentication is planned for Week 9; this section will change then.
+> **Note on Render Free Tier:** If the API has not received traffic for 15 minutes, the first request may take ~30–45 seconds to spin up from sleep. Subsequent requests respond instantly.
 
-## Endpoints
+---
 
-| Method | Path | Purpose |
-|---|---|---|
-| GET | `/` | Health check |
-| GET | `/listings` | Available listings updated since a date |
-| GET | `/listings/{id}/landlord-contact` | Landlord contact (only if opted in) |
-| GET | `/listings/{id}/location` | Area and city |
-| GET | `/listings/{id}/size` | Bedrooms and bathrooms |
-| GET | `/bookings` | Refunded bookings updated since a date |
-| GET | `/bookings/{id}/escrow-status` | Escrow status of a booking |
-| GET | `/api/students` | List students |
-| POST | `/api/students` | Create a student |
-| PUT | `/api/students/{id}` | Update a student |
-| DELETE | `/api/students/{id}` | Delete a student |
+## 📋 Endpoint Specification & Examples
 
-Note that student routes start with `/api`, but listings and bookings do not.
+### 1. Listings & Property Details
 
-### Health check: `GET /`
+#### `GET /listings`
+Retrieves listings filtered by status and update date.
+- **Query Parameters:**
+  - `status` (*required*): Must be `"available"`.
+  - `updatedSince` (*required*): Date string in `YYYY-MM-DD` format (e.g., `2026-01-01`).
+- **Example cURL:**
+  ```bash
+  curl "https://nyumbahub-api-gdit.onrender.com/listings?status=available&updatedSince=2026-01-01"
+  ```
+- **Example Response (`200 OK`):**
+  ```json
+  {
+    "listings": [
+      {
+        "id": "1",
+        "status": "available",
+        "reason": "vacated",
+        "updatedAt": "2026-09-21T22:54:06.000Z"
+      },
+      {
+        "id": "2",
+        "status": "available",
+        "reason": "newly_listed",
+        "updatedAt": "2026-09-21T22:54:06.000Z"
+      }
+    ]
+  }
+  ```
 
-```
-curl http://localhost:5000/
-```
+#### `GET /listings/:id/location`
+Gets geographic area and city for a specific listing.
+- **Example:** `GET https://nyumbahub-api-gdit.onrender.com/listings/1/location`
+- **Response (`200 OK`):**
+  ```json
+  {
+    "area": "Kilimani",
+    "city": "Nairobi"
+  }
+  ```
 
-Response `200` (plain text):
+#### `GET /listings/:id/size`
+Gets room counts for a specific listing.
+- **Example:** `GET https://nyumbahub-api-gdit.onrender.com/listings/1/size`
+- **Response (`200 OK`):**
+  ```json
+  {
+    "bedrooms": 2,
+    "bathrooms": 1
+  }
+  ```
 
-```
-API is running
-```
+#### `GET /listings/:id/landlord-contact`
+Returns landlord contact information **only if** the landlord has opted in (`opted_in = 1`).
+- **Example with opt-in:** `GET https://nyumbahub-api-gdit.onrender.com/listings/1/landlord-contact`
+  ```json
+  {
+    "available": true,
+    "contact": {
+      "name": "Jane Wanjiru",
+      "phone": "0722000001",
+      "email": "jane@example.com"
+    }
+  }
+  ```
+- **Example without opt-in (Listing 2):**
+  ```json
+  {
+    "available": false,
+    "contact": null
+  }
+  ```
 
-### List available listings: `GET /listings`
+---
 
-Both query parameters are required. `status` must be exactly `available`. `updatedSince` is a date such as `2026-01-01`; listings updated on or after it are returned. `reason` is `vacated` if the listing was previously rented, otherwise `newly_listed`.
+### 2. Bookings & Escrow
 
-```
-curl "http://localhost:5000/listings?status=available&updatedSince=2026-01-01"
-```
+#### `GET /bookings`
+Fetches bookings with status filters.
+- **Query Parameters:**
+  - `status` (*required*): Must be `"refunded"`.
+  - `updatedSince` (*required*): Date string in `YYYY-MM-DD` format (e.g., `2026-01-01`).
+- **Example cURL:**
+  ```bash
+  curl "https://nyumbahub-api-gdit.onrender.com/bookings?status=refunded&updatedSince=2026-01-01"
+  ```
+- **Response (`200 OK`):**
+  ```json
+  {
+    "bookings": [
+      {
+        "id": "1",
+        "listingId": "3",
+        "status": "refunded",
+        "refundReasonCategory": "property_mismatch",
+        "updatedAt": "2026-09-21T22:54:07.000Z"
+      }
+    ]
+  }
+  ```
 
-Response `200`: see the quickstart above.
+#### `GET /bookings/:id/escrow-status`
+Checks the escrow status of a booking.
+- **Example:** `GET https://nyumbahub-api-gdit.onrender.com/bookings/1/escrow-status`
+- **Response (`200 OK`):**
+  ```json
+  {
+    "bookingId": "1",
+    "escrowStatus": "released",
+    "updatedAt": "2026-09-21T22:54:07.000Z"
+  }
+  ```
 
-### Get landlord contact: `GET /listings/{id}/landlord-contact`
+---
 
-Returns contact details only if the landlord has opted in.
+### 3. Student Records (`/api/students`)
 
-```
-curl http://localhost:5000/listings/1/landlord-contact
-```
-
-Response `200`:
-
-```json
-{
-  "available": true,
-  "contact": { "name": "Jane Wanjiru", "phone": "0722000001", "email": "jane@example.com" }
-}
-```
-
-If the landlord has not opted in (try listing `2`), you still get `200`:
-
-```json
-{ "available": false, "contact": null }
-```
-
-### Get listing location: `GET /listings/{id}/location`
-
-```
-curl http://localhost:5000/listings/1/location
-```
-
-Response `200`:
-
-```json
-{ "area": "Kilimani", "city": "Nairobi" }
-```
-
-### Get listing size: `GET /listings/{id}/size`
-
-```
-curl http://localhost:5000/listings/1/size
-```
-
-Response `200`:
-
-```json
-{ "bedrooms": 2, "bathrooms": 1 }
-```
-
-### List refunded bookings: `GET /bookings`
-
-Both query parameters are required. `status` must be exactly `refunded`.
-
-```
-curl "http://localhost:5000/bookings?status=refunded&updatedSince=2026-01-01"
-```
-
-Response `200`:
-
-```json
-{
-  "bookings": [
+#### `GET /api/students`
+Lists all enrolled students.
+- **Example cURL:**
+  ```bash
+  curl https://nyumbahub-api-gdit.onrender.com/api/students
+  ```
+- **Response (`200 OK`):**
+  ```json
+  [
     {
-      "id": "1",
-      "listingId": "3",
-      "status": "refunded",
-      "refundReasonCategory": "property_mismatch",
-      "updatedAt": "2026-09-21T19:54:07.000Z"
+      "id": 1,
+      "name": "David Kariuki",
+      "email": "david.kariuki@strathmore.edu",
+      "course": "Business Information Technology"
+    },
+    {
+      "id": 2,
+      "name": "Faith Mumbi",
+      "email": "faith.mumbi@strathmore.edu",
+      "course": "Computer Science"
     }
   ]
+  ```
+
+#### `POST /api/students`
+Registers a new student. All three fields (`name`, `email`, `course`) are required.
+- **cURL:**
+  ```bash
+  curl -X POST https://nyumbahub-api-gdit.onrender.com/api/students \
+    -H "Content-Type: application/json" \
+    -d '{"name":"Amina Hassan","email":"amina.hassan@strathmore.edu","course":"Computer Science"}'
+  ```
+- **Response (`201 Created`):**
+  ```json
+  {
+    "id": 10,
+    "name": "Amina Hassan",
+    "email": "amina.hassan@strathmore.edu",
+    "course": "Computer Science"
+  }
+  ```
+
+#### `PUT /api/students/:id`
+Updates student details by ID.
+- **cURL:**
+  ```bash
+  curl -X PUT https://nyumbahub-api-gdit.onrender.com/api/students/1 \
+    -H "Content-Type: application/json" \
+    -d '{"name":"David Kariuki","email":"david.kariuki@strathmore.edu","course":"Software Engineering"}'
+  ```
+- **Response (`200 OK`):**
+  ```json
+  {
+    "id": "1",
+    "name": "David Kariuki",
+    "email": "david.kariuki@strathmore.edu",
+    "course": "Software Engineering"
+  }
+  ```
+
+#### `DELETE /api/students/:id`
+Deletes a student record.
+- **cURL:**
+  ```bash
+  curl -X DELETE https://nyumbahub-api-gdit.onrender.com/api/students/10
+  ```
+- **Response (`200 OK`):**
+  ```json
+  {
+    "message": "Student deleted"
+  }
+  ```
+
+---
+
+## 💻 Frontend Code Snippet (JavaScript / React / FundiLink Integration)
+
+Here is a ready-to-copy code snippet for the FundiLink app to consume listings:
+
+```javascript
+const BASE_URL = 'https://nyumbahub-api-gdit.onrender.com';
+
+// Fetch available listings
+async function getAvailableListings() {
+  try {
+    const response = await fetch(`${BASE_URL}/listings?status=available&updatedSince=2026-01-01`);
+    if (!response.ok) throw new Error(`HTTP error: ${response.status}`);
+    const data = await response.json();
+    console.log('Listings received:', data.listings);
+    return data.listings;
+  } catch (error) {
+    console.error('Failed to fetch listings:', error);
+  }
+}
+
+// Fetch details for a listing
+async function getListingDetails(listingId) {
+  try {
+    const [locationRes, sizeRes, contactRes] = await Promise.all([
+      fetch(`${BASE_URL}/listings/${listingId}/location`),
+      fetch(`${BASE_URL}/listings/${listingId}/size`),
+      fetch(`${BASE_URL}/listings/${listingId}/landlord-contact`)
+    ]);
+
+    const location = await locationRes.json();
+    const size = await sizeRes.json();
+    const contact = await contactRes.json();
+
+    return { location, size, contact };
+  } catch (error) {
+    console.error(`Failed to fetch details for listing ${listingId}:`, error);
+  }
 }
 ```
 
-### Get booking escrow status: `GET /bookings/{id}/escrow-status`
+---
 
-```
-curl http://localhost:5000/bookings/1/escrow-status
-```
+## ⚠️ Error Handling Contract
 
-Response `200`:
+Failed requests return an HTTP status with a JSON error payload:
 
-```json
-{ "bookingId": "1", "escrowStatus": "released", "updatedAt": "2026-09-21T19:54:07.000Z" }
-```
+| Error Case | Status | Response Body |
+| :--- | :--- | :--- |
+| Missing query param in `/listings` | `400 Bad Request` | `{"code": "invalid_query_param", "message": "status and updatedSince are required query parameters"}` |
+| Invalid query param value | `400 Bad Request` | `{"code": "invalid_query_param", "message": "status must be \"available\""}` |
+| Listing not found | `404 Not Found` | `{"code": "listing_not_found", "message": "No listing with id 999"}` |
+| Booking not found | `404 Not Found` | `{"code": "booking_not_found", "message": "No booking with id 999"}` |
+| Missing fields in student create | `400 Bad Request` | `{"error": "name, email, and course are required"}` |
 
-Booking `2` returns `"escrowStatus": "held"`.
+---
 
-> Payments and escrow are simulated in NyumbaHub. These endpoints only read stored records; they do not move money.
+## 🛠️ Running Locally (Optional)
 
-### List students: `GET /api/students`
+If you need to develop or run this repository on your local machine:
 
-```
-curl http://localhost:5000/api/students
-```
-
-Response `200`: a plain array (not wrapped in an object). The sample data has 8 students; the first two are:
-
-```json
-[
-  { "id": 1, "name": "David Kariuki", "email": "david.kariuki@strathmore.edu", "course": "Business Information Technology" },
-  { "id": 2, "name": "Faith Mumbi", "email": "faith.mumbi@strathmore.edu", "course": "Computer Science" }
-]
-```
-
-### Create a student: `POST /api/students`
-
-Body fields `name`, `email` and `course` are all required.
-
-macOS, Linux or Command Prompt:
-
-```
-curl -X POST http://localhost:5000/api/students -H "Content-Type: application/json" -d "{\"name\":\"Amina Hassan\",\"email\":\"amina.hassan@strathmore.edu\",\"course\":\"Computer Science\"}"
-```
-
-Windows PowerShell (PowerShell mangles quotes inside `curl.exe` bodies, so use this instead):
-
-```
-Invoke-RestMethod -Method Post -Uri http://localhost:5000/api/students -ContentType "application/json" -Body '{"name":"Amina Hassan","email":"amina.hassan@strathmore.edu","course":"Computer Science"}' | ConvertTo-Json
-```
-
-Response `201 Created`:
-
-```json
-{ "id": 10, "name": "Amina Hassan", "email": "amina.hassan@strathmore.edu", "course": "Computer Science" }
-```
-
-Save the `id`; yours may differ if you have created students before.
-
-### Update a student: `PUT /api/students/{id}`
-
-Send all three fields. Replace `10` with the `id` you just got.
-
-macOS, Linux or Command Prompt:
-
-```
-curl -X PUT http://localhost:5000/api/students/10 -H "Content-Type: application/json" -d "{\"name\":\"Amina Hassan\",\"email\":\"amina.hassan@strathmore.edu\",\"course\":\"Software Engineering\"}"
-```
-
-Windows PowerShell:
-
-```
-Invoke-RestMethod -Method Put -Uri http://localhost:5000/api/students/10 -ContentType "application/json" -Body '{"name":"Amina Hassan","email":"amina.hassan@strathmore.edu","course":"Software Engineering"}' | ConvertTo-Json
-```
-
-Response `200`:
-
-```json
-{ "id": "10", "name": "Amina Hassan", "email": "amina.hassan@strathmore.edu", "course": "Software Engineering" }
-```
-
-The `id` comes back as a string here. This route does not check that the student exists: updating an `id` that does not exist still returns `200` and changes nothing.
-
-### Delete a student: `DELETE /api/students/{id}`
-
-```
-curl -X DELETE http://localhost:5000/api/students/10
-```
-
-Response `200`:
-
-```json
-{ "message": "Student deleted" }
-```
-
-Use the `id` you got from the create call (replace `10` if yours was different). Deleting an `id` that does not exist also returns `200` with this same message.
-
-## Errors
-
-Failed requests return an HTTP error status plus a small JSON body. There are **two shapes**, depending on which part of the API you called.
-
-| Part of the API | Body shape |
-|---|---|
-| `/listings`, `/bookings` | `{ "code": "...", "message": "..." }` |
-| `/api/students` | `{ "error": "..." }` |
-
-Real examples:
-
-`GET /listings?status=available` (missing `updatedSince`) → `400`
-```json
-{ "code": "invalid_query_param", "message": "status and updatedSince are required query parameters" }
-```
-
-`GET /listings?status=rented&updatedSince=2026-01-01` → `400`
-```json
-{ "code": "invalid_query_param", "message": "status must be \"available\"" }
-```
-
-`GET /bookings?status=confirmed&updatedSince=2026-01-01` → `400`
-```json
-{ "code": "invalid_query_param", "message": "status must be \"refunded\"" }
-```
-
-`GET /listings/9999/location` (also `/size` and `/landlord-contact`) → `404`
-```json
-{ "code": "listing_not_found", "message": "No listing with id 9999" }
-```
-
-`GET /bookings/9999/escrow-status` → `404`
-```json
-{ "code": "booking_not_found", "message": "No booking with id 9999" }
-```
-
-`POST /api/students` with a missing field → `400`
-```json
-{ "error": "name, email, and course are required" }
-```
-
-`GET /listings?status=available&updatedSince=banana` (a value that is not a date) → `500`
-```json
-{ "code": "internal_error", "message": "Failed to fetch listings" }
-```
-
-A request body that is not valid JSON (usually a shell quoting problem) → `400` with an **HTML error page**, not JSON. If you see HTML instead of JSON, check your quotes; in PowerShell use the `Invoke-RestMethod` examples above.
-
-Any unexpected database failure returns `500` (for example `{ "code": "internal_error", "message": "Failed to fetch listings" }`). If you see a `500` on every request, check your database settings in `server/.env`.
-
-## Run it locally
-
-You need:
-
-1. **Node.js 18 or newer** (check with `node -v`).
-2. **MySQL 8** (or MariaDB, as bundled with XAMPP) running on port 3306.
-3. **Git.**
-
-Run these commands one at a time:
-
-```
+```bash
 git clone https://github.com/Alvin425770/api_intergration.git
 cd api_intergration/server
 npm install
 ```
 
-Create your settings file by copying the example, then open `.env` and put in your own MySQL password:
-
+Configure `server/.env`:
+```env
+DB_HOST=localhost
+DB_USER=root
+DB_PASSWORD=your_password
+DB_NAME=students_db
+DB_PORT=3306
+PORT=5000
 ```
-copy .env.example .env      (Windows)
-cp .env.example .env        (macOS / Linux)
-```
 
-Create the database and load the sample data in one step (enter your MySQL password when asked):
-
-```
+Load sample data:
+```bash
 mysql -u root -p -e "source schema.sql"
 ```
 
-(This form works in Command Prompt, PowerShell and macOS/Linux terminals. The shorter `mysql -u root -p < schema.sql` does not work in PowerShell.)
-
-Start the API:
-
+Start dev server:
+```bash
+npm start
 ```
-npm run dev
-```
-
-Leave that terminal open. Then check it is alive: open <http://localhost:5000/> in a browser. You should see `API is running`. Then run the quickstart command above.
-
-Re-run the `schema.sql` import any time to reset the sample data. `npm start` also works if you do not want auto-restart.
-
-Settings in `server/.env`: `DB_HOST`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` (use `students_db`), `DB_PORT` (usually `3306`) and optionally `PORT` (the API port, default `5000`).
-
-## Limitations
-
-This is an initial backend. Server-side authentication, real M-Pesa (Daraja) payments, server-enforced escrow, and endpoints to create or change listings and bookings are not implemented yet.
+Server runs at `http://localhost:5000`.
