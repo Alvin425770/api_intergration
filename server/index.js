@@ -10,6 +10,9 @@ app.use(cors());
 app.use(express.json());
 
 // middleware placeholders (loaded safely)
+const rateLimit = require('./middleware/rateLimit');
+app.use(rateLimit({ windowMs: 60 * 1000, max: 100 }));
+
 let authMiddleware = {};
 let rateLimitMiddleware = {};
 
