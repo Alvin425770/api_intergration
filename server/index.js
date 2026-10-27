@@ -9,6 +9,13 @@ const port = process.env.PORT || 5000;
 app.use(cors());
 app.use(express.json());
 
+//middleware placeholders (loaded safely)
+const authMiddleware = require('./middleware/auth');
+const rateLimitMiddleware = require('./middleware/rateLimiter');
+
+if (authMiddleware.requireApiKey) app.use(authMiddleware.requireApiKey);
+if (rateLimitMiddleware.rateLimiter) app.use(rateLimitMiddleware.rateLimiter);
+
 app.get('/', (req, res) => {
   res.send('API is running');
 });
@@ -58,3 +65,4 @@ app.get('/api/gym/memberships', async (req, res) => {
     res.status(502).json({ message: 'Partner data unavailable' });
   }
 });
+
