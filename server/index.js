@@ -9,9 +9,12 @@ const port = process.env.PORT || 5000;
 app.use(cors());
 app.use(express.json());
 
-//middleware placeholders (loaded safely)
-const authMiddleware = require('./middleware/auth');
-const rateLimitMiddleware = require('./middleware/rateLimiter');
+// middleware placeholders (loaded safely)
+let authMiddleware = {};
+let rateLimitMiddleware = {};
+
+try { authMiddleware = require('./middleware/auth'); } catch (e) {}
+try { rateLimitMiddleware = require('./middleware/rateLimiter'); } catch (e) {}
 
 if (authMiddleware.requireApiKey) app.use(authMiddleware.requireApiKey);
 if (rateLimitMiddleware.rateLimiter) app.use(rateLimitMiddleware.rateLimiter);
