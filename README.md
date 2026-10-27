@@ -16,6 +16,13 @@ Make sure the API is running (see [Run it locally](#run-it-locally)), then open 
 curl "http://localhost:5000/listings?status=available&updatedSince=2026-01-01"
 ```
 
+Use this commands:
+CD server //enter the server folder
+node index.js //to start the live server
+//ensure the database is accessible
+
+
+
 > **Windows PowerShell users:** type `curl.exe` instead of `curl` (plain `curl` is a different command in PowerShell). Do this for every example below.
 
 You should get back `200` and:
