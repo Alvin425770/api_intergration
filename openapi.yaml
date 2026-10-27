@@ -1,20 +1,24 @@
 openapi: 3.0.3
 info:
-  title: Student Housing API with GymBuddy Partner Integration
-  version: 1.0.0
+  title: NyumbaHub API (with GymBuddy Partner Integration)
+  version: 1.1.0
   description: |
     REST API for students, housing listings, bookings and the GymBuddy
     partner amenity.
-
+ 
     **Authentication.** Every endpoint except `GET /` requires an API key in
     the `X-API-Key` request header. A missing or unknown key returns `401`.
-
-    **Rate limiting.** Requests are limited per API key. When a key goes over
-    its limit the API answers `429` (see the `TooManyRequests` response).
-
+    Never share your key publicly; keys are issued privately per consumer.
+ 
+    **Rate limiting.** Requests are limited per API key (100 requests per
+    minute). Over the limit the API answers `429` with a `Retry-After` header
+    (seconds) and a JSON body `{ "message": "Too many requests", "retryAfter": 42 }`.
+ 
     **Error formats.** The API currently uses three error shapes, documented
-    in `components/schemas`: `{ message }` (auth, partner),
+    in `components/schemas`: `{ message }` (auth, rate limit, partner),
     `{ code, message }` (listings, bookings) and `{ error }` (students).
+    A request body that is not valid JSON returns `400` with an HTML error
+    page, not JSON.
 servers:
   - url: http://localhost:5000
     description: Local development
@@ -26,7 +30,7 @@ tags:
   - name: Listings
   - name: Bookings
   - name: GymBuddy
-
+ 
 paths:
   /:
     get:
@@ -37,14 +41,19 @@ paths:
       responses:
         '200':
           description: The API is running.
-
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: API is running
+ 
   /api/students:
     get:
       tags: [Students]
       summary: List all students
       responses:
         '200':
-          description: All students.
+          description: All students (a plain array, not wrapped in an object).
           content:
             application/json:
               schema:
@@ -56,13 +65,7 @@ paths:
         '429':
           $ref: '#/components/responses/TooManyRequests'
         '500':
-          description: Database error.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorSimple'
-              example:
-                error: Failed to fetch students
+          $ref: '#/components/responses/StudentsInternalError'
     post:
       tags: [Students]
       summary: Add a student
@@ -96,20 +99,17 @@ paths:
         '429':
           $ref: '#/components/responses/TooManyRequests'
         '500':
-          description: Database error.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorSimple'
-              example:
-                error: Failed to add student
-
+          $ref: '#/components/responses/StudentsInternalError'
+ 
   /api/students/{id}:
     parameters:
       - $ref: '#/components/parameters/StudentId'
     put:
       tags: [Students]
       summary: Update a student
+      description: |
+        Send all three fields. This route does not check that the student
+        exists: an unknown id still returns `200` and changes nothing.
       requestBody:
         required: true
         content:
@@ -118,26 +118,26 @@ paths:
               $ref: '#/components/schemas/StudentInput'
       responses:
         '200':
-          description: Student updated. Echoes the submitted values.
+          description: Echoes the submitted values. The `id` comes back as a string.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Student'
+                $ref: '#/components/schemas/StudentUpdated'
+              example:
+                id: '10'
+                name: Amina Hassan
+                email: amina.hassan@strathmore.edu
+                course: Software Engineering
         '401':
           $ref: '#/components/responses/Unauthorized'
         '429':
           $ref: '#/components/responses/TooManyRequests'
         '500':
-          description: Database error.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorSimple'
-              example:
-                error: Failed to update student
+          $ref: '#/components/responses/StudentsInternalError'
     delete:
       tags: [Students]
       summary: Delete a student
+      description: Deleting an unknown id also returns `200` with the same message.
       responses:
         '200':
           description: Student deleted.
@@ -155,18 +155,12 @@ paths:
         '429':
           $ref: '#/components/responses/TooManyRequests'
         '500':
-          description: Database error.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorSimple'
-              example:
-                error: Failed to delete student
-
+          $ref: '#/components/responses/StudentsInternalError'
+ 
   /listings:
     get:
       tags: [Listings]
-      summary: Listings that changed to available since a given time
+      summary: Listings that changed to available since a given date
       parameters:
         - name: status
           in: query
@@ -174,14 +168,7 @@ paths:
           schema:
             type: string
             enum: [available]
-        - name: updatedSince
-          in: query
-          required: true
-          description: Only listings updated at or after this time.
-          schema:
-            type: string
-            format: date-time
-          example: '2026-10-01T00:00:00Z'
+        - $ref: '#/components/parameters/UpdatedSince'
       responses:
         '200':
           description: Matching listings.
@@ -202,7 +189,7 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
-
+ 
   /listings/{id}/landlord-contact:
     parameters:
       - $ref: '#/components/parameters/ListingId'
@@ -225,9 +212,9 @@ paths:
                   value:
                     available: true
                     contact:
-                      name: John Kamau
-                      phone: '+254700000000'
-                      email: john@example.com
+                      name: Jane Wanjiru
+                      phone: '0722000001'
+                      email: jane@example.com
                 notOptedIn:
                   summary: Landlord has not opted in
                   value:
@@ -241,7 +228,7 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
-
+ 
   /listings/{id}/location:
     parameters:
       - $ref: '#/components/parameters/ListingId'
@@ -271,7 +258,7 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
-
+ 
   /listings/{id}/size:
     parameters:
       - $ref: '#/components/parameters/ListingId'
@@ -301,11 +288,11 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
-
+ 
   /bookings:
     get:
       tags: [Bookings]
-      summary: Bookings that were refunded since a given time
+      summary: Bookings that were refunded since a given date
       parameters:
         - name: status
           in: query
@@ -313,14 +300,7 @@ paths:
           schema:
             type: string
             enum: [refunded]
-        - name: updatedSince
-          in: query
-          required: true
-          description: Only bookings updated at or after this time.
-          schema:
-            type: string
-            format: date-time
-          example: '2026-10-01T00:00:00Z'
+        - $ref: '#/components/parameters/UpdatedSince'
       responses:
         '200':
           description: Matching bookings.
@@ -341,7 +321,7 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
-
+ 
   /bookings/{id}/escrow-status:
     parameters:
       - name: id
@@ -353,6 +333,7 @@ paths:
     get:
       tags: [Bookings]
       summary: Escrow status of a booking
+      description: Payments and escrow are simulated. This endpoint only reads stored records.
       responses:
         '200':
           description: Escrow status.
@@ -369,9 +350,9 @@ paths:
                     type: string
                     format: date-time
                 example:
-                  bookingId: '12'
-                  escrowStatus: held
-                  updatedAt: '2026-10-20T09:30:00.000Z'
+                  bookingId: '1'
+                  escrowStatus: released
+                  updatedAt: '2026-09-21T19:54:07.000Z'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '404':
@@ -382,12 +363,12 @@ paths:
                 $ref: '#/components/schemas/ErrorCode'
               example:
                 code: booking_not_found
-                message: No booking with id 999
+                message: No booking with id 9999
         '429':
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
-
+ 
   /api/gym/memberships:
     get:
       tags: [GymBuddy]
@@ -425,15 +406,15 @@ paths:
                 $ref: '#/components/schemas/ErrorMessage'
               example:
                 message: Partner data unavailable
-
+ 
 components:
   securitySchemes:
     ApiKeyAuth:
       type: apiKey
       in: header
       name: X-API-Key
-      description: API key issued to the client. Keys are configured in the server's `API_KEYS` environment variable.
-
+      description: API key issued to the client. Send it on every request except `GET /`.
+ 
   parameters:
     StudentId:
       name: id
@@ -449,7 +430,17 @@ components:
       description: Listing id.
       schema:
         type: string
-
+    UpdatedSince:
+      name: updatedSince
+      in: query
+      required: true
+      description: |
+        Only records updated on or after this date, for example `2026-01-01`.
+        A value that is not a date currently returns `500` (known issue).
+      schema:
+        type: string
+      example: '2026-01-01'
+ 
   responses:
     Unauthorized:
       description: The `X-API-Key` header is missing or the key is not valid.
@@ -460,11 +451,19 @@ components:
           example:
             message: Missing or invalid API key
     TooManyRequests:
-      description: This API key has exceeded its rate limit. Wait and retry.
+      description: This API key exceeded its rate limit. Wait the number of seconds in `Retry-After`, then retry.
+      headers:
+        Retry-After:
+          description: Seconds until the limit resets.
+          schema:
+            type: integer
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/ErrorMessage'
+            $ref: '#/components/schemas/RateLimited'
+          example:
+            message: Too many requests
+            retryAfter: 42
     InvalidQueryParam:
       description: A required query parameter is missing or has an unsupported value.
       content:
@@ -482,7 +481,7 @@ components:
             $ref: '#/components/schemas/ErrorCode'
           example:
             code: listing_not_found
-            message: No listing with id 999
+            message: No listing with id 9999
     InternalError:
       description: Unexpected server or database error.
       content:
@@ -492,14 +491,32 @@ components:
           example:
             code: internal_error
             message: Failed to fetch listings
-
+    StudentsInternalError:
+      description: Database error.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorSimple'
+          example:
+            error: Failed to fetch students
+ 
   schemas:
     ErrorMessage:
       type: object
-      description: Used by authentication, rate limiting and the partner endpoint.
+      description: Used by authentication and the partner endpoint.
       properties:
         message:
           type: string
+    RateLimited:
+      type: object
+      description: Returned with status 429, together with a `Retry-After` header.
+      required: [message, retryAfter]
+      properties:
+        message:
+          type: string
+        retryAfter:
+          type: integer
+          description: Seconds to wait before retrying.
     ErrorCode:
       type: object
       description: Used by the listings and bookings routes.
@@ -514,7 +531,7 @@ components:
       properties:
         error:
           type: string
-
+ 
     StudentInput:
       type: object
       required: [name, email, course]
@@ -533,7 +550,14 @@ components:
             id:
               type: integer
         - $ref: '#/components/schemas/StudentInput'
-
+    StudentUpdated:
+      allOf:
+        - type: object
+          properties:
+            id:
+              type: string
+        - $ref: '#/components/schemas/StudentInput'
+ 
     ListingChange:
       type: object
       properties:
@@ -561,7 +585,7 @@ components:
         refundReasonCategory:
           type: string
           description: Defaults to `other` when no category is stored.
-          example: other
+          example: property_mismatch
         updatedAt:
           type: string
           format: date-time
@@ -591,3 +615,5 @@ components:
           type: string
         details:
           type: string
+ 
+Claude finished the response

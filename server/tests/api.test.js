@@ -1,6 +1,6 @@
 // server/tests/api.test.js  (Part E: automated regression tests)
 //
-// Run from the project root:   node --test server/tests/api.test.js
+// Run from the server folder:   node --test tests/api.test.js
 //
 // Needs no extra packages: it uses Node's built-in test runner and fetch.
 // The tests start the real server as a child process on spare ports, using
@@ -8,6 +8,11 @@
 // real .env keys, the Railway partner or a working database.
 // (Only requests that fail validation are sent to the DB routes, so the
 // database is never queried.)
+//
+// Handout mapping (Week 9, Part E step 4):
+//   - "request without a key gets 401"  -> describe('API key authentication')
+//   - "valid key gets 200"              -> GET /api/gym/memberships with a valid key,
+//                                          and GET / (public health check)
 
 const { describe, test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
@@ -210,7 +215,7 @@ describe('input validation', () => {
   });
 
   test('GET /listings with an unsupported status returns 400', async () => {
-    const r = await api(MAIN_PORT, '/listings?status=rented&updatedSince=2026-01-01T00:00:00Z', {
+    const r = await api(MAIN_PORT, '/listings?status=rented&updatedSince=2026-01-01', {
       key: KEYS.routes,
     });
     assert.equal(r.status, 400);
@@ -224,7 +229,7 @@ describe('input validation', () => {
   });
 
   test('GET /bookings with a status other than "refunded" returns 400', async () => {
-    const r = await api(MAIN_PORT, '/bookings?status=paid&updatedSince=2026-01-01T00:00:00Z', {
+    const r = await api(MAIN_PORT, '/bookings?status=paid&updatedSince=2026-01-01', {
       key: KEYS.routes,
     });
     assert.equal(r.status, 400);
@@ -283,21 +288,31 @@ describe('GET /api/gym/memberships', () => {
 
 // =====================================================================
 // Part C: rate limiting (Peace's work)
-// Skipped by default. Run it once the rate limiter is merged:
-//   PowerShell:  $env:RUN_RATE_LIMIT_TEST=1; node --test server/tests/api.test.js
+// Skipped by default. Run it once the rate limiter is merged AND wired into
+// index.js (app.use(rateLimit(...)) after the key check):
+//   PowerShell:  $env:RUN_RATE_LIMIT_TEST=1; node --test tests/api.test.js
+// If your limit is higher than 200 per window, also set BURST_SIZE.
 // =====================================================================
 describe('rate limiting (per key)', () => {
-  const skip = !process.env.RUN_RATE_LIMIT_TEST && 'set RUN_RATE_LIMIT_TEST=1 once Part C is merged';
-  const BURST = Number(process.env.BURST_SIZE || 200); // raise if your limit is higher
+  const skip = !process.env.RUN_RATE_LIMIT_TEST && 'set RUN_RATE_LIMIT_TEST=1 once Part C is merged and wired';
+  const BURST = Number(process.env.BURST_SIZE || 200);
 
-  test('a burst on one key eventually returns 429, while another key is unaffected', { skip }, async () => {
+  test('a burst on one key returns 429 with Retry-After and a JSON body; another key is unaffected', { skip }, async () => {
     const statuses = [];
+    let limited = null;
     for (let i = 0; i < BURST; i++) {
       const r = await api(MAIN_PORT, '/listings', { key: KEYS.burst });
       statuses.push(r.status);
+      if (r.status === 429 && !limited) limited = r;
     }
-    assert.ok(statuses.includes(429), 'expected at least one 429 during the burst');
-    assert.equal(statuses[0], 400, 'first request should pass auth and rate limit (400 = missing params)');
+
+    assert.equal(statuses[0], 400, 'first request should pass auth and the limiter (400 = missing params)');
+    assert.ok(limited, 'expected at least one 429 during the burst');
+
+    // Handout Part C step 4: Retry-After header and a JSON body
+    assert.ok(Number(limited.headers.get('retry-after')) > 0, 'expected a Retry-After header');
+    assert.equal(limited.json.message, 'Too many requests');
+    assert.equal(typeof limited.json.retryAfter, 'number');
 
     const other = await api(MAIN_PORT, '/listings', { key: KEYS.other });
     assert.notEqual(other.status, 429, 'a different key must not be throttled');
