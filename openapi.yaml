@@ -1,121 +1,311 @@
-openapi: 3.0.0
+openapi: 3.0.3
 info:
-  title: NyumbaHub API (FundiLink Integration)
+  title: Student Housing API with GymBuddy Partner Integration
   version: 1.0.0
-  description: >
-    Endpoints NyumbaHub exposes to FundiLink, per Week 3's ENDPOINT_LIST.md
-    (Group 10). Six read endpoints live on NyumbaHub's own API and are fully
-    specified below. The seventh entry, POST /fundi-requests, is included for
-    completeness because it appears in ENDPOINT_LIST.md, but it is hosted on
-    FundiLink's API, not ours — NyumbaHub is the *caller* of that endpoint,
-    not the server. See the `x-hosted-by` field on that path for detail.
+  description: |
+    REST API for students, housing listings, bookings and the GymBuddy
+    partner amenity.
 
+    **Authentication.** Every endpoint except `GET /` requires an API key in
+    the `X-API-Key` request header. A missing or unknown key returns `401`.
+
+    **Rate limiting.** Requests are limited per API key. When a key goes over
+    its limit the API answers `429` (see the `TooManyRequests` response).
+
+    **Error formats.** The API currently uses three error shapes, documented
+    in `components/schemas`: `{ message }` (auth, partner),
+    `{ code, message }` (listings, bookings) and `{ error }` (students).
 servers:
-  - url: https://api.nyumbahub.com/v1
-    description: NyumbaHub production API (hosts all GET endpoints below)
+  - url: http://localhost:5000
+    description: Local development
+security:
+  - ApiKeyAuth: []
+tags:
+  - name: Health
+  - name: Students
+  - name: Listings
+  - name: Bookings
+  - name: GymBuddy
 
 paths:
-  /listings:
+  /:
     get:
-      summary: List listings that just transitioned to "available" (vacated or newly listed)
-      parameters:
-        - name: status
-          in: query
-          required: true
-          description: Filter to listings currently in this status. Only "available" is supported for this integration.
-          schema:
-            type: string
-            enum: [available]
-            example: available
-        - name: updatedSince
-          in: query
-          required: true
-          description: Only return listings whose status changed at or after this timestamp.
-          schema:
-            type: string
-            format: date-time
-            example: "2026-09-01T06:00:00Z"
+      tags: [Health]
+      summary: Health check
+      description: Public endpoint, no API key needed.
+      security: []
       responses:
         '200':
-          description: Listings that became available since updatedSince, tagged with why.
+          description: The API is running.
+
+  /api/students:
+    get:
+      tags: [Students]
+      summary: List all students
+      responses:
+        '200':
+          description: All students.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Student'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          description: Database error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorSimple'
+              example:
+                error: Failed to fetch students
+    post:
+      tags: [Students]
+      summary: Add a student
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StudentInput'
+            example:
+              name: Jane Doe
+              email: jane@example.com
+              course: Computer Science
+      responses:
+        '201':
+          description: Student created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Student'
+        '400':
+          description: One of name, email or course is missing.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorSimple'
+              example:
+                error: name, email, and course are required
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          description: Database error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorSimple'
+              example:
+                error: Failed to add student
+
+  /api/students/{id}:
+    parameters:
+      - $ref: '#/components/parameters/StudentId'
+    put:
+      tags: [Students]
+      summary: Update a student
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StudentInput'
+      responses:
+        '200':
+          description: Student updated. Echoes the submitted values.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Student'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          description: Database error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorSimple'
+              example:
+                error: Failed to update student
+    delete:
+      tags: [Students]
+      summary: Delete a student
+      responses:
+        '200':
+          description: Student deleted.
           content:
             application/json:
               schema:
                 type: object
-                required: [listings]
+                properties:
+                  message:
+                    type: string
+                example:
+                  message: Student deleted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          description: Database error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorSimple'
+              example:
+                error: Failed to delete student
+
+  /listings:
+    get:
+      tags: [Listings]
+      summary: Listings that changed to available since a given time
+      parameters:
+        - name: status
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [available]
+        - name: updatedSince
+          in: query
+          required: true
+          description: Only listings updated at or after this time.
+          schema:
+            type: string
+            format: date-time
+          example: '2026-10-01T00:00:00Z'
+      responses:
+        '200':
+          description: Matching listings.
+          content:
+            application/json:
+              schema:
+                type: object
                 properties:
                   listings:
                     type: array
                     items:
-                      $ref: '#/components/schemas/AvailableListing'
-              example:
-                listings:
-                  - id: "lst_8841"
-                    status: "available"
-                    reason: "vacated"
-                    updatedAt: "2026-09-01T07:12:00Z"
-                  - id: "lst_9002"
-                    status: "available"
-                    reason: "newly_listed"
-                    updatedAt: "2026-09-01T08:45:00Z"
+                      $ref: '#/components/schemas/ListingChange'
         '400':
-          description: Missing or invalid query parameters (e.g. status not "available", or updatedSince not a valid timestamp).
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-              example:
-                code: "invalid_query_param"
-                message: "updatedSince must be an ISO-8601 timestamp"
+          $ref: '#/components/responses/InvalidQueryParam'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /listings/{id}/landlord-contact:
+    parameters:
+      - $ref: '#/components/parameters/ListingId'
     get:
-      summary: Get a listing's landlord contact info, only if the landlord has opted in
-      parameters:
-        - name: id
-          in: path
-          required: true
-          description: The listing ID.
-          schema:
-            type: string
-            example: "lst_8841"
+      tags: [Listings]
+      summary: Landlord contact details for a listing
+      description: |
+        Contact details are only returned if the landlord opted in. Otherwise
+        the response is `200` with `available: false` and `contact: null`.
       responses:
         '200':
-          description: >
-            Always 200 whether or not contact info is available, by design —
-            this endpoint fails closed and never signals via status code
-            whether an opt-in flag exists on the landlord's account.
+          description: Contact availability.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LandlordContactResponse'
+                $ref: '#/components/schemas/LandlordContact'
               examples:
                 optedIn:
-                  summary: Landlord has opted in
+                  summary: Landlord opted in
                   value:
                     available: true
                     contact:
-                      name: "Grace Wanjiru"
-                      phone: "+254712345678"
-                      email: "grace.w@example.com"
-                optedOut:
-                  summary: Landlord has not opted in (or listing/landlord unknown)
+                      name: John Kamau
+                      phone: '+254700000000'
+                      email: john@example.com
+                notOptedIn:
+                  summary: Landlord has not opted in
                   value:
                     available: false
                     contact: null
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '404':
-          description: Listing ID does not exist.
+          $ref: '#/components/responses/ListingNotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /listings/{id}/location:
+    parameters:
+      - $ref: '#/components/parameters/ListingId'
+    get:
+      tags: [Listings]
+      summary: Area and city of a listing
+      responses:
+        '200':
+          description: Listing location.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-              example:
-                code: "listing_not_found"
-                message: "No listing with id lst_8841"
+                type: object
+                properties:
+                  area:
+                    type: string
+                  city:
+                    type: string
+                example:
+                  area: Kilimani
+                  city: Nairobi
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/ListingNotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /listings/{id}/size:
+    parameters:
+      - $ref: '#/components/parameters/ListingId'
+    get:
+      tags: [Listings]
+      summary: Bedrooms and bathrooms of a listing
+      responses:
+        '200':
+          description: Listing size.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  bedrooms:
+                    type: integer
+                  bathrooms:
+                    type: integer
+                example:
+                  bedrooms: 2
+                  bathrooms: 1
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/ListingNotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /bookings:
     get:
-      summary: List bookings that ended in a refund since a given timestamp
+      tags: [Bookings]
+      summary: Bookings that were refunded since a given time
       parameters:
         - name: status
           in: query
@@ -123,329 +313,281 @@ paths:
           schema:
             type: string
             enum: [refunded]
-            example: refunded
         - name: updatedSince
           in: query
           required: true
+          description: Only bookings updated at or after this time.
           schema:
             type: string
             format: date-time
-            example: "2026-09-01T00:00:00Z"
+          example: '2026-10-01T00:00:00Z'
       responses:
         '200':
-          description: Refunded bookings since updatedSince, with a general reason category (never the raw complaint text).
+          description: Matching bookings.
           content:
             application/json:
               schema:
                 type: object
-                required: [bookings]
                 properties:
                   bookings:
                     type: array
                     items:
                       $ref: '#/components/schemas/RefundedBooking'
-              example:
-                bookings:
-                  - id: "bkg_5521"
-                    listingId: "lst_8841"
-                    status: "refunded"
-                    refundReasonCategory: "property_mismatch"
-                    updatedAt: "2026-09-01T09:30:00Z"
         '400':
-          description: Missing or invalid query parameters.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-
-  /listings/{id}/location:
-    get:
-      summary: Get a listing's area and city (lightweight, cacheable)
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-            example: "lst_8841"
-      responses:
-        '200':
-          description: The listing's area and city.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ListingLocation'
-              example:
-                area: "Kilimani"
-                city: "Nairobi"
-        '404':
-          description: Listing ID does not exist.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-
-  /listings/{id}/size:
-    get:
-      summary: Get a listing's bedroom and bathroom counts
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-            example: "lst_8841"
-      responses:
-        '200':
-          description: Bedroom and bathroom counts, for scoping a job.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ListingSize'
-              example:
-                bedrooms: 2
-                bathrooms: 1
-        '404':
-          description: Listing ID does not exist.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
+          $ref: '#/components/responses/InvalidQueryParam'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /bookings/{id}/escrow-status:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Booking id.
+        schema:
+          type: string
     get:
-      summary: Get the current escrow status of a single booking
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-            example: "bkg_5521"
+      tags: [Bookings]
+      summary: Escrow status of a booking
       responses:
         '200':
-          description: The booking's current escrow status.
+          description: Escrow status.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/EscrowStatus'
-              example:
-                bookingId: "bkg_5521"
-                escrowStatus: "released"
-                updatedAt: "2026-09-02T10:00:00Z"
+                type: object
+                properties:
+                  bookingId:
+                    type: string
+                  escrowStatus:
+                    type: string
+                  updatedAt:
+                    type: string
+                    format: date-time
+                example:
+                  bookingId: '12'
+                  escrowStatus: held
+                  updatedAt: '2026-10-20T09:30:00.000Z'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '404':
-          description: Booking ID does not exist.
+          description: No booking with that id.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-
-  /fundi-requests:
-    x-hosted-by: FundiLink
-    post:
-      summary: >
-        (External — hosted on FundiLink's API, not NyumbaHub's) Create a fundi
-        job request when a tenant/landlord confirms a service prompt.
-        Documented here only because it appears in ENDPOINT_LIST.md as the one
-        NyumbaHub → FundiLink call; NyumbaHub is the caller, FundiLink is the server.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/FundiRequestCreate'
-            example:
-              bookingId: "bkg_5521"
-              listingId: "lst_8841"
-              serviceType: "move_in_cleaning"
-      responses:
-        '201':
-          description: Fundi job request created on FundiLink's side.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/FundiRequestCreated'
+                $ref: '#/components/schemas/ErrorCode'
               example:
-                id: "req_3391"
-                bookingId: "bkg_5521"
-                listingId: "lst_8841"
-                serviceType: "move_in_cleaning"
-                status: "pending"
-                createdAt: "2026-09-02T10:05:00Z"
-        '400':
-          description: Malformed request (e.g. missing bookingId or listingId).
+                code: booking_not_found
+                message: No booking with id 999
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/gym/memberships:
+    get:
+      tags: [GymBuddy]
+      summary: GymBuddy membership tiers (proxied from the partner)
+      description: |
+        The backend calls the GymBuddy partner API and returns only the
+        agreed contract fields `tier`, `price` and `details`. Any other field
+        the partner sends is dropped. If the partner is down or answers with
+        an error status, this endpoint returns `502`.
+      responses:
+        '200':
+          description: Membership tiers.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                type: array
+                items:
+                  $ref: '#/components/schemas/Membership'
+              example:
+                - tier: Daily Drop-In
+                  price: 500 KES
+                  details: Full facility access for 24 hours.
+                - tier: Monthly Standard
+                  price: 5,000 KES
+                  details: Unlimited access + GymBuddy App.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '502':
+          description: The partner is unavailable (connection failed or it returned an error status).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+              example:
+                message: Partner data unavailable
 
 components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: API key issued to the client. Keys are configured in the server's `API_KEYS` environment variable.
+
+  parameters:
+    StudentId:
+      name: id
+      in: path
+      required: true
+      description: Student id.
+      schema:
+        type: string
+    ListingId:
+      name: id
+      in: path
+      required: true
+      description: Listing id.
+      schema:
+        type: string
+
+  responses:
+    Unauthorized:
+      description: The `X-API-Key` header is missing or the key is not valid.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorMessage'
+          example:
+            message: Missing or invalid API key
+    TooManyRequests:
+      description: This API key has exceeded its rate limit. Wait and retry.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorMessage'
+    InvalidQueryParam:
+      description: A required query parameter is missing or has an unsupported value.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorCode'
+          example:
+            code: invalid_query_param
+            message: status and updatedSince are required query parameters
+    ListingNotFound:
+      description: No listing with that id.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorCode'
+          example:
+            code: listing_not_found
+            message: No listing with id 999
+    InternalError:
+      description: Unexpected server or database error.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorCode'
+          example:
+            code: internal_error
+            message: Failed to fetch listings
+
   schemas:
-    AvailableListing:
+    ErrorMessage:
       type: object
-      required: [id, status, reason, updatedAt]
+      description: Used by authentication, rate limiting and the partner endpoint.
       properties:
-        id:
+        message:
           type: string
-          example: "lst_8841"
-        status:
-          type: string
-          enum: [available]
-          example: "available"
-        reason:
-          type: string
-          description: Why this listing just became available.
-          enum: [vacated, newly_listed]
-          example: "vacated"
-        updatedAt:
-          type: string
-          format: date-time
-          example: "2026-09-01T07:12:00Z"
-
-    LandlordContactResponse:
+    ErrorCode:
       type: object
-      required: [available]
-      properties:
-        available:
-          type: boolean
-          description: Whether the landlord has opted in to being contacted by service partners.
-          example: true
-        contact:
-          description: Present only when available is true; null otherwise.
-          nullable: true
-          allOf:
-            - $ref: '#/components/schemas/LandlordContact'
-
-    LandlordContact:
-      type: object
-      required: [name, phone]
-      properties:
-        name:
-          type: string
-          example: "Grace Wanjiru"
-        phone:
-          type: string
-          example: "+254712345678"
-        email:
-          type: string
-          format: email
-          nullable: true
-          example: "grace.w@example.com"
-
-    RefundedBooking:
-      type: object
-      required: [id, listingId, status, refundReasonCategory, updatedAt]
-      properties:
-        id:
-          type: string
-          example: "bkg_5521"
-        listingId:
-          type: string
-          example: "lst_8841"
-        status:
-          type: string
-          enum: [refunded]
-          example: "refunded"
-        refundReasonCategory:
-          type: string
-          description: General category only — never the tenant's original complaint text.
-          enum: [property_mismatch, cancellation, other]
-          example: "property_mismatch"
-        updatedAt:
-          type: string
-          format: date-time
-          example: "2026-09-01T09:30:00Z"
-
-    ListingLocation:
-      type: object
-      required: [area, city]
-      properties:
-        area:
-          type: string
-          example: "Kilimani"
-        city:
-          type: string
-          example: "Nairobi"
-
-    ListingSize:
-      type: object
-      required: [bedrooms, bathrooms]
-      properties:
-        bedrooms:
-          type: integer
-          minimum: 0
-          example: 2
-        bathrooms:
-          type: integer
-          minimum: 0
-          example: 1
-
-    EscrowStatus:
-      type: object
-      required: [bookingId, escrowStatus, updatedAt]
-      properties:
-        bookingId:
-          type: string
-          example: "bkg_5521"
-        escrowStatus:
-          type: string
-          enum: [held, released, disputed]
-          example: "released"
-        updatedAt:
-          type: string
-          format: date-time
-          example: "2026-09-02T10:00:00Z"
-
-    FundiRequestCreate:
-      type: object
-      required: [bookingId, listingId, serviceType]
-      properties:
-        bookingId:
-          type: string
-          description: NyumbaHub's internal booking ID for the confirmed service.
-          example: "bkg_5521"
-        listingId:
-          type: string
-          description: NyumbaHub's internal listing ID.
-          example: "lst_8841"
-        serviceType:
-          type: string
-          enum: [move_in_cleaning, repair, inspection]
-          example: "move_in_cleaning"
-
-    FundiRequestCreated:
-      type: object
-      required: [id, bookingId, listingId, serviceType, status, createdAt]
-      properties:
-        id:
-          type: string
-          example: "req_3391"
-        bookingId:
-          type: string
-          example: "bkg_5521"
-        listingId:
-          type: string
-          example: "lst_8841"
-        serviceType:
-          type: string
-          example: "move_in_cleaning"
-        status:
-          type: string
-          enum: [pending, accepted, rejected]
-          example: "pending"
-        createdAt:
-          type: string
-          format: date-time
-          example: "2026-09-02T10:05:00Z"
-
-    Error:
-      type: object
-      required: [code, message]
+      description: Used by the listings and bookings routes.
       properties:
         code:
           type: string
-          example: "listing_not_found"
         message:
           type: string
-          example: "No listing with id lst_8841"
+    ErrorSimple:
+      type: object
+      description: Used by the students routes.
+      properties:
+        error:
+          type: string
 
+    StudentInput:
+      type: object
+      required: [name, email, course]
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        course:
+          type: string
+    Student:
+      allOf:
+        - type: object
+          properties:
+            id:
+              type: integer
+        - $ref: '#/components/schemas/StudentInput'
+
+    ListingChange:
+      type: object
+      properties:
+        id:
+          type: string
+        status:
+          type: string
+          example: available
+        reason:
+          type: string
+          enum: [vacated, newly_listed]
+        updatedAt:
+          type: string
+          format: date-time
+    RefundedBooking:
+      type: object
+      properties:
+        id:
+          type: string
+        listingId:
+          type: string
+        status:
+          type: string
+          example: refunded
+        refundReasonCategory:
+          type: string
+          description: Defaults to `other` when no category is stored.
+          example: other
+        updatedAt:
+          type: string
+          format: date-time
+    LandlordContact:
+      type: object
+      properties:
+        available:
+          type: boolean
+        contact:
+          type: object
+          nullable: true
+          properties:
+            name:
+              type: string
+            phone:
+              type: string
+            email:
+              type: string
+              nullable: true
+    Membership:
+      type: object
+      required: [tier, price, details]
+      properties:
+        tier:
+          type: string
+        price:
+          type: string
+        details:
+          type: string
