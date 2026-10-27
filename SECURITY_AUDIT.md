@@ -143,7 +143,7 @@ grep -rn "console.log" . --include=*.js --exclude-dir=node_modules   # nothing p
 
 | Issue | Fix | File |
 |-------|-----|------|
-| _[fill in]_ | | |
+|  | | |
 
 ## Remaining risks
 
