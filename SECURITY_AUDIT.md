@@ -139,14 +139,35 @@ grep -rn "console.log" . --include=*.js --exclude-dir=node_modules   # nothing p
 
 ---
 
+## Issues found
+
+| # | Issue | Severity | Where found |
+|---|-------|----------|-------------|
+| 1 | The real `.env` (database host, user, password, name, port, and both API keys) was shared outside the repo while preparing this assignment, so those secrets should be treated as exposed | High | Check 5 |
+| 2 | `.env` values are wrapped in double quotes; some loaders keep the quotes as part of the value, which can cause every request to return 401 or make keys fail to match | Low | Check 5 |
+| 3 | Database credentials and API keys live in the same file, so one accidental commit leaks both | Medium | Check 5 |
+| 4 | Single access level: any valid key can read and write every record, and a leaked key gives full access | Medium | Check 2 |
+| 5 | Rate limiter is in memory: it resets on restart and does not work across multiple server copies | Low | Rate limiting |
+| 6 | API keys have no expiry; rotation is manual | Low | Check 5 |
+| 7 | Route-level results (checks 1 to 4): see the [VERIFY] sections above. Add any issue found by `audit_check.sh` here | n/a | Checks 1 to 4 |
+
 ## Fixes made
 
-| Issue | Fix | File |
-|-------|-----|------|
-| _[fill in]_ | | |
+Tick each box once it is done, so this file only claims what is true.
+
+| # | Fix | Done |
+|---|-----|------|
+| 1 | Rotated the database password and generated two new API keys (`node -e "console.log(require('crypto').randomBytes(24).toString('hex'))"`), then sent the ring partner their new key privately | [ ] |
+| 2 | Confirmed `.env` is listed in `.gitignore` and does not appear in `git status` or `git log --all -- .env` | [ ] |
+| 3 | Added `.env.example` with placeholder values only (`API_KEYS=key1,key2`, `DB_PASSWORD=changeme`) | [ ] |
+| 4 | Removed the quotes around `.env` values, or confirmed at startup that the loaded key count is correct (count printed, never the keys) | [ ] |
+| 5 | Replaced raw database rows with explicit field lists in responses (only if check 1 found extra fields) | [ ] |
+| 6 | Added a final error handler that returns a generic 500 and logs details server-side only (only if check 3 found leaks) | [ ] |
+| 7 | Allow-listed accepted fields on POST/PUT instead of using `req.body` directly (only if check 4 found a problem) | [ ] |
+| 8 | Added tests: no key returns 401, valid key returns 200; full suite passes | [ ] |
 
 ## Remaining risks
 
-- Single access level: any valid key can read and write all records.
-- In-memory rate limiter (see above).
-- Keys have no expiry; rotation is manual.
+- Single access level (issue 4): acceptable for this course, but a permission model with 401 and 403 would be needed for real users.
+- In-memory rate limiter (issue 5): a shared store such as Redis would be used in production.
+- Manual key rotation (issue 6): production APIs would support expiry and per-key revocation.
