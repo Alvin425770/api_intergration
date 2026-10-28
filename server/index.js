@@ -41,7 +41,10 @@ const PARTNER_URL = process.env.PARTNER_URL;
 app.get('/api/gym/memberships', async (req, res) => {
   try {
     const response = await fetch(`${PARTNER_URL}/memberships`, {
-      headers: { 'Accept': 'application/json' }
+      headers: {
+        'Accept': 'application/json',
+        'X-API-Key': process.env.PARTNER_API_KEY
+      }
     });
 
     if (!response.ok) {
@@ -50,9 +53,6 @@ app.get('/api/gym/memberships', async (req, res) => {
     }
 
     const memberships = await response.json();
-    
-    // (Optional debug log during build - remember to remove before commit)
-    // console.log('Raw partner response:', memberships);
 
     // Map according to GymBuddy contract: { tier, price, details }
     const formattedData = memberships.map(m => ({
