@@ -12,7 +12,7 @@ curl -s -H "X-API-Key: <your-api-key>" http://localhost:3000/<resource>/1
 ```
 Look for: `password`, `passwordHash`, `token`, `email`, `isAdmin`, `createdBy`, or any internal column the consumer's app does not need.
 
-**What I found:** _[fill in; "nothing wrong" is a valid answer]_
+**What I found:** 
 
 **Fix (if needed):** stop returning raw database rows. Build each response from an explicit field list:
 ```js
