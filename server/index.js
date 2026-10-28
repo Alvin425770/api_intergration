@@ -11,13 +11,13 @@ app.use(express.json());
 
 // middleware placeholders (loaded safely)
 let authMiddleware = {};
-let rateLimitMiddleware = {};
 
 try { authMiddleware = require('./middleware/auth'); } catch (e) {}
-try { rateLimitMiddleware = require('./middleware/rateLimiter'); } catch (e) {}
+const rateLimit = require('./middleware/rateLimit');
 
 if (authMiddleware.requireApiKey) app.use(authMiddleware.requireApiKey);
-if (rateLimitMiddleware.rateLimiter) app.use(rateLimitMiddleware.rateLimiter);
+// must come after the key check so the limiter can count per API key
+app.use(rateLimit({ windowMs: 60 * 1000, max: 100 }));
 
 app.get('/', (req, res) => {
   res.send('API is running');
@@ -68,4 +68,3 @@ app.get('/api/gym/memberships', async (req, res) => {
     res.status(502).json({ message: 'Partner data unavailable' });
   }
 });
-
