@@ -168,10 +168,6 @@ Tick each box once it is done, so this file only claims what is true.
 
 ## Remaining risks
 
-- Single access level (issue 4): acceptable for this course, but a permission model with 401 and 403 would be needed for real users.
-- In-memory rate limiter (issue 5): a shared store such as Redis would be used in production.
-- Manual key rotation (issue 6): production APIs would support expiry and per-key revocation.
-<<<<<<< Updated upstream
-=======
->>>>>>> 520c45d ( security audit)
->>>>>>> Stashed changes
+- Single access level: any valid key can read and write all records.
+- In-memory rate limiter (see above).
+- Keys have no expiry; rotation is manual.
