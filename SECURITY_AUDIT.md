@@ -36,7 +36,7 @@ curl -i -H "X-API-Key: <your-api-key>" http://localhost:3000/<resource>/999999
 ```
 Also confirm that every route that takes an ID uses a **parameterized query** (`WHERE id = ?` with the value passed separately), never string concatenation.
 
-**What I found:** _[fill in]_
+**What I found:** 
 
 **Note:** this API has one access level, so any valid key may read any record. That is acceptable this week and matches the 401-only design. If records ever belong to individual users, a 403 check will be needed.
 
@@ -55,7 +55,7 @@ curl -i http://localhost:3000/does-not-exist
 ```
 Look for: stack traces, file paths (`/home/...`), SQL text, table or column names, the database host.
 
-**What I found:** _[fill in]_
+**What I found:** 
 
 **Fix (if needed):** add a final error handler that logs details server-side only:
 ```js
