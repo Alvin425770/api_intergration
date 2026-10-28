@@ -79,7 +79,7 @@ curl -s -H "X-API-Key: <your-api-key>" http://localhost:3000/<resource>/9999
 ```
 If record 9999 exists, or `isAdmin` was stored, the endpoint is vulnerable.
 
-**What I found:** _[fill in]_
+**What I found:** 
 
 **Fix (if needed):** pick fields explicitly instead of spreading `req.body`:
 ```js
@@ -113,7 +113,7 @@ grep -rn "X-API-Key" README.md openapi.yaml  # placeholders only, e.g. <your-api
 grep -rn "console.log" . --include=*.js --exclude-dir=node_modules   # nothing prints a key or DB password
 ```
 
-**What I found:** _[fill in]_
+**What I found:** 
 
 **Recommended hygiene:**
 - Commit `.env.example` with placeholders only (`API_KEYS=key1,key2`, `DB_PASSWORD=changeme`).
