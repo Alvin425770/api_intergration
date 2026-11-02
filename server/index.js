@@ -44,7 +44,8 @@ app.get('/api/gym/memberships', async (req, res) => {
       headers: {
         'Accept': 'application/json',
         'X-API-Key': process.env.PARTNER_API_KEY
-      }
+      },
+      signal: AbortSignal.timeout(1500)// give up after 1.5 seconds
     });
 
     if (!response.ok) {
@@ -64,7 +65,9 @@ app.get('/api/gym/memberships', async (req, res) => {
     res.json(formattedData);
   } catch (err) {
     // Crucial for Part D: catch connection errors (ECONNREFUSED, ENOTFOUND, etc.)
-    console.error('Partner call failed:', err.cause?.code || err.message);
+    const reason = err.name === 'TimeoutError'
+      ? 'timeout' : (err.cause?.code) || err.message;
+    console.error('Partner call failed:', reason);
     res.status(502).json({ message: 'Partner data unavailable' });
   }
 });
