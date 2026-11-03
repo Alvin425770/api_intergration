@@ -376,30 +376,47 @@ paths:
       description: |
         The backend calls the GymBuddy partner API and returns only the
         agreed contract fields `tier`, `price` and `details`. Any other field
-        the partner sends is dropped. If the partner is down or answers with
-        an error status, this endpoint returns `502`.
+        the partner sends is dropped. The response includes whether the data
+        is stale and when it was last fetched. After partner failures, the
+        GET retries transient errors up to two times with backoff. The last
+        successful data is returned after failures; without cached data this
+        endpoint returns `502`.
       responses:
         '200':
-          description: Membership tiers.
+          description: Membership tiers, with cache freshness metadata.
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Membership'
+                type: object
+                required: [data, stale, asOf]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Membership'
+                  stale:
+                    type: boolean
+                    description: True when the response is using saved data after a partner failure.
+                  asOf:
+                    type: string
+                    format: date-time
+                    description: When the returned membership data was last fetched successfully.
               example:
-                - tier: Daily Drop-In
-                  price: 500 KES
-                  details: Full facility access for 24 hours.
-                - tier: Monthly Standard
-                  price: 5,000 KES
-                  details: Unlimited access + GymBuddy App.
+                data:
+                  - tier: Daily Drop-In
+                    price: 500 KES
+                    details: Full facility access for 24 hours.
+                  - tier: Monthly Standard
+                    price: 5,000 KES
+                    details: Unlimited access + GymBuddy App.
+                stale: false
+                asOf: '2026-11-03T07:11:49.920Z'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '429':
           $ref: '#/components/responses/TooManyRequests'
         '502':
-          description: The partner is unavailable (connection failed or it returned an error status).
+          description: The partner failed after retries and no cached membership data was available.
           content:
             application/json:
               schema:

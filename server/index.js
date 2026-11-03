@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
+const { fetchWithRetry } = require('./resilientFetch');
 
 const app = express();
 const port = process.env.PORT || 5000;
@@ -32,42 +33,51 @@ app.use('/listings', listingRoutes);
 const bookingRoutes = require('./routes/bookings');
 app.use('/bookings', bookingRoutes);
 
-app.listen(port, () => {
-  console.log(`Server is running on http://localhost:${port}`);
-});
-
 const PARTNER_URL = process.env.PARTNER_URL;
+let lastGoodMemberships = null;
 
 app.get('/api/gym/memberships', async (req, res) => {
   try {
-    const response = await fetch(`${PARTNER_URL}/memberships`, {
+    const response = await fetchWithRetry(`${PARTNER_URL}/memberships`, {
       headers: {
         'Accept': 'application/json',
         'X-API-Key': process.env.PARTNER_API_KEY
       },
-      signal: AbortSignal.timeout(1500)// give up after 1.5 seconds
-    });
+    }, { timeoutMs: 1500, retries: 2, delayMs: 200 });
 
     if (!response.ok) {
-      console.error('Partner returned status:', response.status);
-      return res.status(502).json({ message: 'Partner data unavailable' });
+      throw new Error(`Partner returned status ${response.status}`);
     }
 
     const memberships = await response.json();
+    if (!Array.isArray(memberships)) {
+      throw new Error('Partner returned invalid membership data');
+    }
 
-    // Map according to GymBuddy contract: { tier, price, details }
-    const formattedData = memberships.map(m => ({
+    const data = memberships.map(m => ({
       tier: m.tier,
       price: m.price,
       details: m.details
     }));
+    lastGoodMemberships = {
+      data,
+      asOf: new Date().toISOString()
+    };
 
-    res.json(formattedData);
+    res.json({ ...lastGoodMemberships, stale: false });
   } catch (err) {
-    // Crucial for Part D: catch connection errors (ECONNREFUSED, ENOTFOUND, etc.)
     const reason = err.name === 'TimeoutError'
       ? 'timeout' : (err.cause?.code) || err.message;
     console.error('Partner call failed:', reason);
+
+    if (lastGoodMemberships) {
+      return res.json({ ...lastGoodMemberships, stale: true });
+    }
+
     res.status(502).json({ message: 'Partner data unavailable' });
   }
+});
+
+app.listen(port, () => {
+  console.log(`Server is running on http://localhost:${port}`);
 });

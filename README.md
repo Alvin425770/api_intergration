@@ -278,27 +278,31 @@ Deletes a student record.
 ### 4. GymBuddy Partner Amenity
 
 #### `GET /api/gym/memberships`
-Returns GymBuddy membership tiers. The backend calls the GymBuddy partner API and returns only the agreed contract fields `tier`, `price` and `details`; any other field the partner sends is dropped.
+Returns GymBuddy membership tiers. The backend calls the GymBuddy partner API and returns only the agreed contract fields `tier`, `price` and `details`; any other field the partner sends is dropped. A successful response includes `data`, `stale`, and `asOf`. After partner failures, the last successful data is returned with `stale: true`; if no successful data has been cached, the endpoint returns `502`.
 - **Example cURL:**
   ```bash
   curl -H "X-API-Key: YOUR_API_KEY" https://nyumbahub-api-gdit.onrender.com/api/gym/memberships
   ```
 - **Response (`200 OK`):**
   ```json
-  [
-    {
-      "tier": "Daily Drop-In",
-      "price": "500 KES",
-      "details": "Full facility access for 24 hours."
-    },
-    {
-      "tier": "Monthly Standard",
-      "price": "5,000 KES",
-      "details": "Unlimited access + GymBuddy App."
-    }
-  ]
+  {
+    "data": [
+      {
+        "tier": "Daily Drop-In",
+        "price": "500 KES",
+        "details": "Full facility access for 24 hours."
+      },
+      {
+        "tier": "Monthly Standard",
+        "price": "5,000 KES",
+        "details": "Unlimited access + GymBuddy App."
+      }
+    ],
+    "stale": false,
+    "asOf": "2026-11-03T07:11:49.920Z"
+  }
   ```
-- **If the partner is down or returns an error (`502 Bad Gateway`):**
+- **If the partner has failed and no cached data is available (`502 Bad Gateway`):**
   ```json
   { "message": "Partner data unavailable" }
   ```
@@ -433,3 +437,11 @@ Start dev server:
 npm start
 ```
 Server runs at `http://localhost:5000`.
+
+To run the frontend locally, install the root project dependencies and create a root `.env.local` file (ignored by Git) containing an API key that is also listed in `server/.env`:
+```env
+API_PROXY_KEY=your-local-api-key
+API_PROXY_TARGET=http://localhost:5000
+```
+
+Then run `npm run dev` from the repository root and open the URL Vite prints. The Vite development server adds `X-API-Key` while proxying `/api/gym/memberships`; the key stays server-side and is not included in the browser bundle. Do not rename it to a `VITE_` variable. This proxy is for local development only; a production deployment needs its own server-side proxy or user authentication.

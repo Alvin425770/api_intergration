@@ -1,6 +1,6 @@
-// server/tests/api.test.js  (Part E: automated regression tests)
+// server/tests/api.test.js  (API and partner integration regression tests)
 //
-// Run from the server folder:   node --test tests/api.test.js
+// Run from the server folder:   npm test
 //
 // Needs no extra packages: it uses Node's built-in test runner and fetch.
 // The tests start the real server as a child process on spare ports, using
@@ -40,9 +40,15 @@ const KEYS = {
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // ---------- mock GymBuddy partner ----------
-let partnerMode = 'ok'; // 'ok' | 'error'
+let partnerMode = 'ok'; // 'ok' | 'flaky' | 'error'
+let partnerCalls = 0;
 const mockPartner = http.createServer((req, res) => {
   if (req.url === '/memberships') {
+    partnerCalls += 1;
+    if (partnerMode === 'flaky' && partnerCalls % 3 !== 0) {
+      res.writeHead(503);
+      return res.end('try again');
+    }
     if (partnerMode === 'error') {
       res.writeHead(500);
       return res.end('partner exploded');
@@ -256,24 +262,41 @@ describe('GET /api/gym/memberships', () => {
     assert.equal(r.status, 401);
   });
 
-  test('with a valid key returns 200 and only { tier, price, details }', async () => {
+  test('with a valid key returns live data in the response envelope', async () => {
     partnerMode = 'ok';
     const r = await api(MAIN_PORT, '/api/gym/memberships', { key: KEYS.gym });
     assert.equal(r.status, 200);
-    assert.ok(Array.isArray(r.json));
-    assert.deepEqual(r.json, [
+    assert.deepEqual(r.json.data, [
       { tier: 'Test Tier', price: '100 KES', details: 'Test details' },
     ]);
+    assert.equal(r.json.stale, false);
+    assert.ok(Number.isFinite(Date.parse(r.json.asOf)));
     // internal_cost from the partner must be stripped out
-    assert.equal(r.json[0].internal_cost, undefined);
+    assert.equal(r.json.data[0].internal_cost, undefined);
   });
 
-  test('returns 502 "Partner data unavailable" when the partner answers with an error status', async () => {
+  test('retries transient partner failures and returns live data when recovered', async () => {
+    partnerMode = 'flaky';
+    partnerCalls = 0;
+    const r = await api(MAIN_PORT, '/api/gym/memberships', { key: KEYS.gym });
+    assert.equal(r.status, 200);
+    assert.equal(r.json.stale, false);
+    assert.equal(partnerCalls, 3);
+    partnerMode = 'ok';
+  });
+
+  test('returns last-known-good data with a timestamp when all partner attempts fail', async () => {
     partnerMode = 'error';
+    partnerCalls = 0;
     try {
       const r = await api(MAIN_PORT, '/api/gym/memberships', { key: KEYS.gym });
-      assert.equal(r.status, 502);
-      assert.equal(r.json.message, 'Partner data unavailable');
+      assert.equal(r.status, 200);
+      assert.equal(partnerCalls, 3);
+      assert.deepEqual(r.json.data, [
+        { tier: 'Test Tier', price: '100 KES', details: 'Test details' },
+      ]);
+      assert.equal(r.json.stale, true);
+      assert.ok(Number.isFinite(Date.parse(r.json.asOf)));
     } finally {
       partnerMode = 'ok';
     }
