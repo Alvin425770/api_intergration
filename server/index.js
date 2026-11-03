@@ -38,6 +38,16 @@ let lastGoodMemberships = null;
 
 app.get('/api/gym/memberships', async (req, res) => {
   try {
+    const response = await fetchWithRetry(
+      `${PARTNER_URL}/memberships`,
+      {
+        headers: {
+          'Accept': 'application/json',
+          'X-API-Key': process.env.PARTNER_API_KEY
+        }
+      },
+      { timeoutMs: 1500, retries: 2, delayMs: 200 }
+    );
 
     if (!response.ok) {
       throw new Error(`Partner returned status ${response.status}`);
