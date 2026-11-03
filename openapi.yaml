@@ -17,8 +17,7 @@ info:
     **Error formats.** The API currently uses three error shapes, documented
     in `components/schemas`: `{ message }` (auth, rate limit, partner),
     `{ code, message }` (listings, bookings) and `{ error }` (students).
-    A request body that is not valid JSON returns `400` with an HTML error
-    page, not JSON.
+    Malformed JSON request bodies return a sanitized `400` JSON error.
 servers:
   - url: http://localhost:5000
     description: Local development

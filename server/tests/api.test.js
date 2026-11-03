@@ -202,6 +202,15 @@ describe('API key authentication', () => {
     const r = await api(MAIN_PORT, '/api/students/1', { method: 'DELETE' });
     assert.equal(r.status, 401);
   });
+
+  test('malformed JSON without a key is rejected before the body is parsed', async () => {
+    const r = await fetch(`http://127.0.0.1:${MAIN_PORT}/api/students`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{bad json',
+    });
+    assert.equal(r.status, 401);
+  });
 });
 
 // =====================================================================
@@ -250,6 +259,30 @@ describe('input validation', () => {
     });
     assert.equal(r.status, 400);
     assert.equal(r.json.error, 'name, email, and course are required');
+  });
+
+  test('malformed JSON returns a sanitized JSON error', async () => {
+    const response = await fetch(`http://127.0.0.1:${MAIN_PORT}/api/students`, {
+      method: 'POST',
+      headers: {
+        'X-API-Key': KEYS.routes,
+        'Content-Type': 'application/json',
+      },
+      body: '{bad json',
+    });
+    const body = await response.json();
+
+    assert.equal(response.status, 400);
+    assert.match(response.headers.get('content-type'), /application\/json/);
+    assert.deepEqual(body, { message: 'Invalid JSON request body' });
+    assert.equal(JSON.stringify(body).includes('SyntaxError'), false);
+  });
+
+  test('unknown routes return a sanitized JSON 404', async () => {
+    const r = await api(MAIN_PORT, '/not-a-route', { key: KEYS.routes });
+
+    assert.equal(r.status, 404);
+    assert.deepEqual(r.json, { message: 'Not found' });
   });
 });
 

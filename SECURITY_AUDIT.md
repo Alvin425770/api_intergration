@@ -13,10 +13,11 @@ curl -s -H "X-API-Key: <your-api-key>" http://localhost:5000/api/gym/memberships
 Look for: `password`, `passwordHash`, `token`, `email`, `isAdmin`, `createdBy`, or any internal column the consumer's app does not need.
 
 **What I found:** 
-- `/listings` and `/bookings` endpoints explicitly build Data Transfer Objects (DTOs) with whitelisted fields and do not expose raw database tables.
-- `/listings/:id/landlord-contact` checks the `opted_in` flag and only returns landlord contact details when opted-in (`available: true`).
-- `/api/students` originally used `SELECT * FROM students` and returned raw rows. We audited this and ensured only contracted fields (`id`, `name`, `email`, `course`) are transmitted.
-- No password hashes, tokens, or private administrative flags are present in any API responses.
+- `/listings` and `/bookings` build responses from explicit fields rather than returning raw database rows. Booking responses include refund reason and escrow status.
+- `/listings/:id/landlord-contact` returns a landlord's name, phone, and email only when `opted_in` is true; these are personal contact details and must only be shared under that consent and the API's intended partner access.
+- `/api/students` returns student IDs, names, email addresses, and courses. Email is personal information; the current endpoint contract exposes it to every valid API-key holder. Do not issue keys to callers that do not need student data.
+- GymBuddy membership fields are explicitly mapped to `tier`, `price`, and `details`.
+- No password hashes, tokens, or administrative flags are part of the current response schemas.
 
 **Fix (if needed):** Stop returning raw database rows. Build each response from an explicit field list:
 ```js
@@ -43,7 +44,7 @@ Also confirm that every route that takes an ID uses a **parameterized query** (`
 **What I found:** 
 - Every database query in `students.js`, `listings.js`, and `bookings.js` uses parameterized SQL queries (`?` placeholders with parameter arrays). SQL injection via URL parameters is completely mitigated.
 - Non-existent IDs (e.g., `999999`) cleanly return `404 Not Found` with structured JSON error codes (`listing_not_found`, `booking_not_found`).
-- **Access model note:** This API uses server-to-server API Key authentication with a unified access tier (no multi-tenant user accounts). Any caller with a valid API key has permission to query published listings and student records.
+- **Access-control limitation:** API keys identify consumers but do not grant different permissions or scope records. Any valid key can read the exposed listings, opted-in landlord contact details, booking data, and student records, and can call the student write endpoints. There is no tenant/owner relationship check for IDs. This is acceptable only if all issued consumers are trusted to access this shared dataset; it is not per-user or per-record authorization. Add scoped roles and ownership checks before using this API for tenant-private records.
 
 ---
 
@@ -62,15 +63,13 @@ Look for: stack traces, file paths (`/home/...`), SQL text, table or column name
 
 **What I found:** 
 - Route handlers return clean JSON error messages (e.g., `{"code":"invalid_query_param","message":"status and updatedSince are required query parameters"}`) without leaking stack traces or SQL error text.
-- Missing routes return standard 404 responses.
-- Database connection catch blocks log detailed errors to server console/logs via `console.error(err)` while returning safe, sanitized messages (`500 {"error": "Failed to fetch students"}` or `502 {"message": "Partner data unavailable"}`). No database connection strings or internal paths are leaked to the client.
+- Before this audit, malformed JSON used Express's default error handler, which could return HTML and a stack trace in development. It is now handled with a sanitized JSON `400`; unknown routes return a generic JSON `404`.
+- API-key validation now runs before JSON body parsing, so malformed unauthenticated requests are rejected with `401` before the body is processed.
+- Database route failures return generic JSON messages. Server logs now record the operation and database error code/name instead of dumping the raw database error (which can include SQL details or values). The final Express error handler logs only a status and error type and does not send stack traces, SQL, file paths, or request contents to clients.
 
-**Fix (if needed):** add a final error handler that logs details server-side only:
+**Fix applied:** a final error handler returns sanitized JSON and logs only safe error identifiers:
 ```js
-app.use((err, req, res, next) => {
-  console.error(err);                       // full detail stays in server logs
-  res.status(500).json({ message: 'Internal server error' });
-});
+// Malformed JSON -> 400; unexpected parser/runtime errors -> generic 500.
 ```
 
 ---
@@ -100,29 +99,30 @@ If record 9999 exists, or `isAdmin` was stored, the endpoint is vulnerable.
 
 **What I looked at:** the `.env` file, and where keys could end up (git history, console logs, README).
 
-**Checked from the `.env` file:**
+**Checked from local configuration (values are not recorded here):**
 
 | Item | Result |
 |------|--------|
-| API keys stored in environment, not source code | Yes (`API_KEYS`) |
-| One key per consumer | Yes: 2 distinct keys (ring partner and own team) |
-| Key strength | Good: 48 hex characters each (24 random bytes, matches the handout's generator) |
-| Partner URL uses HTTPS | Yes (`https://webapp-production-36f4.up.railway.app`) |
-| Database credentials in `.env` | Yes: host, user, password, name, port. Untracked and kept local/in Render. |
+| API keys hard-coded in auth middleware | No; it reads `API_KEYS` from the process environment |
+| `server/.env` present in this checkout | No; configure deployment/local server environment separately |
+| Local Vite `.env.local` | Ignored by Git; contains a local development proxy key only |
+| Current key count, strength, and partner URL | Not reverified; no `server/.env` is present in this checkout |
 
 **Checked in repository & history [VERIFY]:**
 ```bash
-git status                                   # .env is NOT listed (correctly ignored)
-git log --all --oneline -- .env              # prints nothing (.env was never committed)
-git log -p --all -S"44be129b"                # real API key is absent from git history
+git check-ignore .env.local server/.env      # confirm local credential files are ignored
+git ls-files .env server/.env .env.local     # confirm they are not currently tracked
+git log --all --oneline -- .env server/.env  # inspect credential-file history; never copy values into the audit
 grep -rn "X-API-Key" README.md openapi.yaml  # placeholders only (<your-api-key>)
 ```
 
 **What I found:** 
 - `.gitignore` properly includes `.env` and `server/.env`.
-- `git status` confirms `.env` is ignored and untracked.
+- `.env.local` and `server/.env` are ignored, and neither is tracked in the current checkout.
+- Git history does contain an older `server/.env`. A value-safe inspection found only local database settings and a placeholder database password; no `API_KEYS` or `PARTNER_API_KEY` entries were present in that historical file. The file is absent from the current checkout.
 - `server/.env.example` contains only placeholder values (`API_KEYS=key1,key2`, `DB_PASSWORD=your_mysql_password`).
 - Documentation files (`README.md`, `openapi.yaml`) use placeholder `<your-api-key>` values and never expose live credentials.
+- API-key authentication and rate-limit middleware do not log the supplied API-key header.
 
 ---
 
@@ -151,6 +151,9 @@ grep -rn "X-API-Key" README.md openapi.yaml  # placeholders only (<your-api-key>
 | 3 | Unbounded requests / loop risk | High | Fixed | Implemented `rateLimiter` (100 req/min) returning HTTP 429 with `Retry-After` header. |
 | 4 | Potential credential leakage | Critical | Fixed | Enforced `.env` in `.gitignore`, committed `.env.example` with placeholders only. |
 | 5 | Downstream partner key sharing | Medium | Completed | Generated distinct 24-byte crypto keys; transmitted partner key privately via DM. |
+| 6 | API keys do not scope access to individual records or read/write permissions | Medium | Open | Recorded as an access-model limitation; implement per-consumer scopes and ownership checks before using private multi-tenant data. |
+| 7 | Default malformed-JSON errors could include HTML/stack details in development | Low | Fixed | Authenticate before parsing; return sanitized JSON errors and generic JSON 404 responses. |
+| 8 | Raw database errors could include SQL details or bound values in server logs | Low | Fixed | Log operation plus database error code/name instead of dumping the raw error object. |
 
 ---
 
@@ -172,6 +175,7 @@ grep -rn "X-API-Key" README.md openapi.yaml  # placeholders only (<your-api-key>
 
 ## Remaining risks & Architecture Notes
 
-- **Single access level:** Any valid API key has read/write privileges. In a multi-tenant enterprise system, Role-Based Access Control (RBAC) with HTTP 403 Forbidden checks would be required.
+- **Single access level and shared records:** Any valid API key can access the shared API dataset and student write endpoints. Do not use this model for tenant-private records; implement per-consumer permissions and record ownership checks first.
+- **Personal information:** Student email addresses and opted-in landlord contact details are exposed by the documented API contract. Issue keys only to trusted consumers with a need for these fields, and review retention/sharing obligations.
 - **In-memory store:** Rate limiter resets on process restart. Production deployments should back this with Redis or Memcached.
 - **Key lifecycle:** API keys are static without automatic expiration; revocation requires updating the environment variable.

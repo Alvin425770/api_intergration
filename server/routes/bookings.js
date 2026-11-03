@@ -35,7 +35,7 @@ router.get('/', async (req, res) => {
 
     res.status(200).json({ bookings });
   } catch (err) {
-    console.error(err);
+    console.error('Failed to fetch bookings:', err.code || err.name);
     res.status(500).json({ code: 'internal_error', message: 'Failed to fetch bookings' });
   }
 });
@@ -60,7 +60,7 @@ router.get('/:id/escrow-status', async (req, res) => {
       updatedAt: new Date(rows[0].updated_at).toISOString()
     });
   } catch (err) {
-    console.error(err);
+    console.error('Failed to fetch escrow status:', err.code || err.name);
     res.status(500).json({ code: 'internal_error', message: 'Failed to fetch escrow status' });
   }
 });
