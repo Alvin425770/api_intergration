@@ -11,13 +11,13 @@ app.use(express.json());
 
 // middleware placeholders (loaded safely)
 let authMiddleware = {};
-let rateLimitMiddleware = {};
 
 try { authMiddleware = require('./middleware/auth'); } catch (e) {}
-try { rateLimitMiddleware = require('./middleware/rateLimiter'); } catch (e) {}
+const rateLimit = require('./middleware/rateLimit');
 
 if (authMiddleware.requireApiKey) app.use(authMiddleware.requireApiKey);
-if (rateLimitMiddleware.rateLimiter) app.use(rateLimitMiddleware.rateLimiter);
+// must come after the key check so the limiter can count per API key
+app.use(rateLimit({ windowMs: 60 * 1000, max: 100 }));
 
 app.get('/', (req, res) => {
   res.send('API is running');
@@ -41,7 +41,11 @@ const PARTNER_URL = process.env.PARTNER_URL;
 app.get('/api/gym/memberships', async (req, res) => {
   try {
     const response = await fetch(`${PARTNER_URL}/memberships`, {
-      headers: { 'Accept': 'application/json' }
+      headers: {
+        'Accept': 'application/json',
+        'X-API-Key': process.env.PARTNER_API_KEY
+      },
+      signal: AbortSignal.timeout(1500)// give up after 1.5 seconds
     });
 
     if (!response.ok) {
@@ -50,9 +54,6 @@ app.get('/api/gym/memberships', async (req, res) => {
     }
 
     const memberships = await response.json();
-    
-    // (Optional debug log during build - remember to remove before commit)
-    // console.log('Raw partner response:', memberships);
 
     // Map according to GymBuddy contract: { tier, price, details }
     const formattedData = memberships.map(m => ({
@@ -64,8 +65,9 @@ app.get('/api/gym/memberships', async (req, res) => {
     res.json(formattedData);
   } catch (err) {
     // Crucial for Part D: catch connection errors (ECONNREFUSED, ENOTFOUND, etc.)
-    console.error('Partner call failed:', err.cause?.code || err.message);
+    const reason = err.name === 'TimeoutError'
+      ? 'timeout' : (err.cause?.code) || err.message;
+    console.error('Partner call failed:', reason);
     res.status(502).json({ message: 'Partner data unavailable' });
   }
 });
-

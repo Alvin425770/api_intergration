@@ -5,8 +5,14 @@ const db = require('../db');
 // GET all students
 router.get('/', async (req, res) => {
   try {
-    const [rows] = await db.query('SELECT * FROM students');
-    res.json(rows);
+    const [rows] = await db.query('SELECT id, name, email, course FROM students');
+    const students = rows.map(s => ({
+      id: s.id,
+      name: s.name,
+      email: s.email,
+      course: s.course
+    }));
+    res.json(students);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to fetch students' });
