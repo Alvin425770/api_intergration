@@ -7,6 +7,9 @@ const { fetchWithRetry } = require('./resilientFetch');
 const app = express();
 const port = process.env.PORT || 5000;
 
+const { monitor, statsHandler } = require('./monitoring');
+
+app.use(monitor);
 app.use(cors());
 
 const { requireApiKey, requireRole } = require('./middleware/auth');
@@ -19,6 +22,8 @@ app.use('/api/students', requireRole('team'));
 app.use('/bookings', requireRole('team'));
 app.use('/listings/:id/landlord-contact', requireRole('team'));
 app.use(express.json());
+
+app.get('/stats', statsHandler);
 
 app.get('/', (req, res) => {
   res.send('API is running');
