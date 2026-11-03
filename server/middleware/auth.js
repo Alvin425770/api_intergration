@@ -6,10 +6,19 @@ const VALID_KEYS = (process.env.API_KEYS || '')
     .split(',')
     .map(k => k.trim())
     .filter(Boolean);
+const TEAM_KEYS = new Set(
+    (process.env.TEAM_API_KEYS || '')
+        .split(',')
+        .map(k => k.trim())
+        .filter(Boolean)
+);
 
 function requireApiKey(req, res, next) {
-    //allow root health check endpoint to remain public (GET /)
-    if (req.path == '/' && req.method === 'GET') {
+    // Keep the health check and public read-only memberships endpoint open.
+    if (
+        req.method === 'GET' &&
+        (req.path === '/' || req.path === '/api/gym/memberships')
+    ) {
         return next();
     }
 
@@ -23,7 +32,17 @@ function requireApiKey(req, res, next) {
 
     //attach key to request object for downstream use (e.g. rate limiting)
     req.apiKey = key;
+    req.apiKeyRole = TEAM_KEYS.has(key) ? 'team' : 'partner';
     next();
 }
 
-module.exports = { requireApiKey };
+function requireRole(role) {
+    return (req, res, next) => {
+        if (req.apiKeyRole !== role) {
+            return res.status(403).json({ message: 'Insufficient permissions' });
+        }
+        next();
+    };
+}
+
+module.exports = { requireApiKey, requireRole };

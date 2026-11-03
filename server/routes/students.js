@@ -14,7 +14,7 @@ router.get('/', async (req, res) => {
     }));
     res.json(students);
   } catch (err) {
-    console.error(err);
+    console.error('Failed to fetch students:', err.code || err.name);
     res.status(500).json({ error: 'Failed to fetch students' });
   }
 });
@@ -32,7 +32,7 @@ router.post('/', async (req, res) => {
     );
     res.status(201).json({ id: result.insertId, name, email, course });
   } catch (err) {
-    console.error(err);
+    console.error('Failed to add student:', err.code || err.name);
     res.status(500).json({ error: 'Failed to add student' });
   }
 });
@@ -48,7 +48,7 @@ router.put('/:id', async (req, res) => {
     );
     res.json({ id, name, email, course });
   } catch (err) {
-    console.error(err);
+    console.error('Failed to update student:', err.code || err.name);
     res.status(500).json({ error: 'Failed to update student' });
   }
 });
@@ -60,7 +60,7 @@ router.delete('/:id', async (req, res) => {
     await db.query('DELETE FROM students WHERE id = ?', [id]);
     res.json({ message: 'Student deleted' });
   } catch (err) {
-    console.error(err);
+    console.error('Failed to delete student:', err.code || err.name);
     res.status(500).json({ error: 'Failed to delete student' });
   }
 });

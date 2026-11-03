@@ -34,7 +34,7 @@ router.get('/', async (req, res) => {
 
     res.status(200).json({ listings });
   } catch (err) {
-    console.error(err);
+    console.error('Failed to fetch listings:', err.code || err.name);
     res.status(500).json({ code: 'internal_error', message: 'Failed to fetch listings' });
   }
 });
@@ -72,7 +72,7 @@ router.get('/:id/landlord-contact', async (req, res) => {
       }
     });
   } catch (err) {
-    console.error(err);
+    console.error('Failed to fetch landlord contact:', err.code || err.name);
     res.status(500).json({ code: 'internal_error', message: 'Failed to fetch landlord contact' });
   }
 });
@@ -90,7 +90,7 @@ router.get('/:id/location', async (req, res) => {
     }
     res.status(200).json({ area: rows[0].area, city: rows[0].city });
   } catch (err) {
-    console.error(err);
+    console.error('Failed to fetch listing location:', err.code || err.name);
     res.status(500).json({ code: 'internal_error', message: 'Failed to fetch listing location' });
   }
 });
@@ -108,7 +108,7 @@ router.get('/:id/size', async (req, res) => {
     }
     res.status(200).json({ bedrooms: rows[0].bedrooms, bathrooms: rows[0].bathrooms });
   } catch (err) {
-    console.error(err);
+    console.error('Failed to fetch listing size:', err.code || err.name);
     res.status(500).json({ code: 'internal_error', message: 'Failed to fetch listing size' });
   }
 });

@@ -1,6 +1,6 @@
-// server/tests/api.test.js  (Part E: automated regression tests)
+// server/tests/api.test.js  (API and partner integration regression tests)
 //
-// Run from the server folder:   node --test tests/api.test.js
+// Run from the server folder:   npm test
 //
 // Needs no extra packages: it uses Node's built-in test runner and fetch.
 // The tests start the real server as a child process on spare ports, using
@@ -35,14 +35,21 @@ const KEYS = {
   dead: 'test-key-dead',
   burst: 'test-key-burst',
   other: 'test-key-other',
+  partner: 'test-key-partner',
 };
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // ---------- mock GymBuddy partner ----------
-let partnerMode = 'ok'; // 'ok' | 'error'
+let partnerMode = 'ok'; // 'ok' | 'flaky' | 'error'
+let partnerCalls = 0;
 const mockPartner = http.createServer((req, res) => {
   if (req.url === '/memberships') {
+    partnerCalls += 1;
+    if (partnerMode === 'flaky' && partnerCalls % 3 !== 0) {
+      res.writeHead(503);
+      return res.end('try again');
+    }
     if (partnerMode === 'error') {
       res.writeHead(500);
       return res.end('partner exploded');
@@ -68,6 +75,7 @@ function startServer(port, partnerUrl) {
       PORT: String(port),
       PARTNER_URL: partnerUrl,
       API_KEYS: Object.values(KEYS).join(','),
+      TEAM_API_KEYS: Object.values(KEYS).filter((key) => key !== KEYS.partner).join(','),
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -172,6 +180,61 @@ describe('API key authentication', () => {
     assert.equal(r.json.message, 'Missing or invalid API key');
   });
 
+  test('partner keys can access published listings but not student records', async () => {
+    const listing = await api(MAIN_PORT, '/listings', { key: KEYS.partner });
+    assert.equal(listing.status, 400, 'valid partner key reaches listing query validation');
+
+    const students = await api(MAIN_PORT, '/api/students', { key: KEYS.partner });
+    assert.equal(students.status, 403);
+    assert.deepEqual(students.json, { message: 'Insufficient permissions' });
+  });
+
+  test('partner keys cannot read bookings or opted-in landlord contact details', async () => {
+    const bookings = await api(MAIN_PORT, '/bookings', { key: KEYS.partner });
+    assert.equal(bookings.status, 403);
+
+    const contact = await api(MAIN_PORT, '/listings/1/landlord-contact', { key: KEYS.partner });
+    assert.equal(contact.status, 403);
+  });
+
+  test('partner keys cannot write student records', async () => {
+    const writes = [
+      await api(MAIN_PORT, '/api/students', {
+        method: 'POST',
+        key: KEYS.partner,
+        body: { name: 'External Consumer', email: 'external@example.com', course: 'CS' },
+      }),
+      await api(MAIN_PORT, '/api/students/1', {
+        method: 'PUT',
+        key: KEYS.partner,
+        body: { name: 'External Consumer', email: 'external@example.com', course: 'CS' },
+      }),
+      await api(MAIN_PORT, '/api/students/1', {
+        method: 'DELETE',
+        key: KEYS.partner,
+      }),
+    ];
+
+    for (const response of writes) {
+      assert.equal(response.status, 403);
+      assert.deepEqual(response.json, { message: 'Insufficient permissions' });
+    }
+  });
+
+  test('partner role is checked before parsing a restricted write body', async () => {
+    const response = await fetch(`http://127.0.0.1:${MAIN_PORT}/api/students`, {
+      method: 'POST',
+      headers: {
+        'X-API-Key': KEYS.partner,
+        'Content-Type': 'application/json',
+      },
+      body: '{bad json',
+    });
+
+    assert.equal(response.status, 403);
+    assert.deepEqual(await response.json(), { message: 'Insufficient permissions' });
+  });
+
   test('key sent in the wrong header (Authorization) is rejected', async () => {
     const r = await api(MAIN_PORT, '/listings', {
       headers: { Authorization: `Bearer ${KEYS.auth}` },
@@ -194,6 +257,15 @@ describe('API key authentication', () => {
 
   test('DELETE /api/students/1 without a key returns 401', async () => {
     const r = await api(MAIN_PORT, '/api/students/1', { method: 'DELETE' });
+    assert.equal(r.status, 401);
+  });
+
+  test('malformed JSON without a key is rejected before the body is parsed', async () => {
+    const r = await fetch(`http://127.0.0.1:${MAIN_PORT}/api/students`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{bad json',
+    });
     assert.equal(r.status, 401);
   });
 });
@@ -245,35 +317,93 @@ describe('input validation', () => {
     assert.equal(r.status, 400);
     assert.equal(r.json.error, 'name, email, and course are required');
   });
+
+  test('malformed JSON returns a sanitized JSON error', async () => {
+    const response = await fetch(`http://127.0.0.1:${MAIN_PORT}/api/students`, {
+      method: 'POST',
+      headers: {
+        'X-API-Key': KEYS.routes,
+        'Content-Type': 'application/json',
+      },
+      body: '{bad json',
+    });
+    const body = await response.json();
+
+    assert.equal(response.status, 400);
+    assert.match(response.headers.get('content-type'), /application\/json/);
+    assert.deepEqual(body, { message: 'Invalid JSON request body' });
+    assert.equal(JSON.stringify(body).includes('SyntaxError'), false);
+  });
+
+  test('unknown routes return a sanitized JSON 404', async () => {
+    const r = await api(MAIN_PORT, '/not-a-route', { key: KEYS.routes });
+
+    assert.equal(r.status, 404);
+    assert.deepEqual(r.json, { message: 'Not found' });
+  });
 });
 
 // =====================================================================
 // GymBuddy partner integration (/api/gym/memberships)
 // =====================================================================
 describe('GET /api/gym/memberships', () => {
-  test('without a key returns 401', async () => {
+  test('public GET returns live memberships without an API key', async () => {
+    partnerMode = 'ok';
     const r = await api(MAIN_PORT, '/api/gym/memberships');
+    assert.equal(r.status, 200);
+    assert.equal(r.json.stale, false);
+    assert.deepEqual(r.json.data, [
+      { tier: 'Test Tier', price: '100 KES', details: 'Test details' },
+    ]);
+  });
+
+  test('other methods on the memberships path still require an API key', async () => {
+    const r = await api(MAIN_PORT, '/api/gym/memberships', { method: 'POST' });
     assert.equal(r.status, 401);
   });
 
-  test('with a valid key returns 200 and only { tier, price, details }', async () => {
+  test('with a valid key returns live data in the response envelope', async () => {
     partnerMode = 'ok';
     const r = await api(MAIN_PORT, '/api/gym/memberships', { key: KEYS.gym });
     assert.equal(r.status, 200);
-    assert.ok(Array.isArray(r.json));
-    assert.deepEqual(r.json, [
+    assert.deepEqual(r.json.data, [
       { tier: 'Test Tier', price: '100 KES', details: 'Test details' },
     ]);
+    assert.equal(r.json.stale, false);
+    assert.ok(Number.isFinite(Date.parse(r.json.asOf)));
     // internal_cost from the partner must be stripped out
-    assert.equal(r.json[0].internal_cost, undefined);
+    assert.equal(r.json.data[0].internal_cost, undefined);
   });
 
-  test('returns 502 "Partner data unavailable" when the partner answers with an error status', async () => {
+  test('partner keys can read GymBuddy memberships', async () => {
+    const r = await api(MAIN_PORT, '/api/gym/memberships', { key: KEYS.partner });
+
+    assert.equal(r.status, 200);
+    assert.equal(r.json.stale, false);
+  });
+
+  test('retries transient partner failures and returns live data when recovered', async () => {
+    partnerMode = 'flaky';
+    partnerCalls = 0;
+    const r = await api(MAIN_PORT, '/api/gym/memberships', { key: KEYS.gym });
+    assert.equal(r.status, 200);
+    assert.equal(r.json.stale, false);
+    assert.equal(partnerCalls, 3);
+    partnerMode = 'ok';
+  });
+
+  test('returns last-known-good data with a timestamp when all partner attempts fail', async () => {
     partnerMode = 'error';
+    partnerCalls = 0;
     try {
       const r = await api(MAIN_PORT, '/api/gym/memberships', { key: KEYS.gym });
-      assert.equal(r.status, 502);
-      assert.equal(r.json.message, 'Partner data unavailable');
+      assert.equal(r.status, 200);
+      assert.equal(partnerCalls, 3);
+      assert.deepEqual(r.json.data, [
+        { tier: 'Test Tier', price: '100 KES', details: 'Test details' },
+      ]);
+      assert.equal(r.json.stale, true);
+      assert.ok(Number.isFinite(Date.parse(r.json.asOf)));
     } finally {
       partnerMode = 'ok';
     }
