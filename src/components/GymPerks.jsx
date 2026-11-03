@@ -4,6 +4,7 @@ export default function GymPerks() {
     const [memberships, setMemberships] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const [staleAsOf, setStaleAsOf] = useState(null);
 
     useEffect(()=> {
         async function fetchGymData() {
@@ -12,7 +13,7 @@ export default function GymPerks() {
                 setError(null);
 
                 //call backend route not gymbuddy directly
-                const res = await fetch('http://localhost:5000/api/gym/memberships');
+                const res = await fetch('/api/gym/memberships');
 
                 if (!res.ok) {
                     //message when backend/partner returns an error status like 502
@@ -20,8 +21,12 @@ export default function GymPerks() {
                     return;
                 }
 
-                const data = await res.json();
-                setMemberships(data);
+                const result = await res.json();
+                if (!Array.isArray(result.data)) {
+                    throw new Error('Invalid membership response');
+                }
+                setMemberships(result.data);
+                setStaleAsOf(result.stale ? result.asOf : null);
             }catch (err) {
                 //failure if the network drops or backend is down
                 console.error('Failed to load gym perks:', err);
@@ -36,13 +41,13 @@ export default function GymPerks() {
 
     return (
         <section style={{ padding: '2rem 1rem', maxWidth: '1000px', margin: '0 auto'}}>
-            <div style={{ textAlign: 'centre', marginBottom: '1.5rem'}}>
+            <div style={{ textAlign: 'center', marginBottom: '1.5rem'}}>
                 <h2 style={{ fontSize: '1.75rem', fontWeight: 'bold'}}>Partner Amenity: GymBuddy Fitness</h2>
                 <p style={{ color: '#666' }}>Exclusive membership option for NyumbaHub residents</p>
             </div>
 
             {/*1. loading state */}
-            {loading && <p style={{ textAlign: 'centre'}}>Loading partner gym offers...</p>}
+            {loading && <p style={{ textAlign: 'center'}}>Loading partner gym offers...</p>}
 
             {/*2. error fallback*/}
             {!loading && error && (
@@ -58,6 +63,24 @@ export default function GymPerks() {
                 </div>
             )}
 
+            {!loading && !error && staleAsOf && (
+                <div
+                    role="status"
+                    style={{
+                        padding: '1rem',
+                        marginBottom: '1rem',
+                        backgroundColor: '#fff3cd',
+                        color: '#856404',
+                        border: '1px solid #ffeeba',
+                        borderRadius: '8px',
+                        textAlign: 'center'
+                    }}
+                >
+                    Showing saved membership data from {new Date(staleAsOf).toLocaleString()}.
+                    The partner is not responding.
+                </div>
+            )}
+
             {/* 3. live partner data cards*/}
             {!loading && !error && (
                 <div style={{
@@ -67,7 +90,7 @@ export default function GymPerks() {
                 }}>
                     {memberships.map((item, index) => (
                         <div
-                        key = {index}
+                        key={item.tier || index}
                         style={{
                             border: '1px solid #e0e0e0',
                             borderRadius: '8px',
@@ -77,7 +100,7 @@ export default function GymPerks() {
                         }}
                         >
                             <h3 style={{ margin: '0 0 0.5rem 0', color: '#1a1a1a' }}>{item.tier}</h3>
-                            <p style={{ fontSize: '1.25rem', fontWeight: 'bold', color: '#0086060', margin: '0.25rem 0'}}>
+                            <p style={{ fontSize: '1.25rem', fontWeight: 'bold', color: '#008060', margin: '0.25rem 0'}}>
                                 {item.price}
                             </p>
                             <p style={{ color: '#555', fontSize: '0.9rem', marginTop: '0.5rem' }}>

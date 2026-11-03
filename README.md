@@ -8,7 +8,7 @@ https://nyumbahub-api-gdit.onrender.com
 ```
 
 - **Format:** JSON responses (`Content-Type: application/json`), except the root health check which returns plain text.
-- **Authentication:** **Required.** Send your API key in the `X-API-Key` header (see [Authentication](#-authentication)). Only the health check `GET /` is public.
+- **Authentication:** Required for all endpoints except the health check `GET /` and read-only GymBuddy memberships `GET /api/gym/memberships`. Protected requests use the `X-API-Key` header (see [Authentication](#-authentication)).
 - **Rate limiting:** 100 requests per minute per API key (see [Rate Limiting](#-rate-limiting)).
 - **Contract:** the full machine-readable API contract is in [`openapi.yaml`](./openapi.yaml).
 - **Local Fallback:** `http://localhost:5000` (if running locally).
@@ -17,18 +17,23 @@ https://nyumbahub-api-gdit.onrender.com
 
 ## 🔑 Authentication
 
-Every endpoint except the health check (`GET /`) requires an API key in the `X-API-Key` request header.
+Every endpoint except the health check (`GET /`) and the public read-only GymBuddy memberships endpoint requires an API key in the `X-API-Key` request header.
 
 ```bash
 curl -H "X-API-Key: YOUR_API_KEY" "https://nyumbahub-api-gdit.onrender.com/api/students"
 ```
 
 - Keys are issued privately per consumer. Never share a key publicly or commit it to Git.
-- On the server, valid keys are set in `server/.env` as a comma-separated list: `API_KEYS=key1,key2`. The real `.env` is never committed. See `server/.env.example` for the variable names.
+- On the server, `API_KEYS` lists every valid key and `TEAM_API_KEYS` lists the subset allowed to access student records and writes, bookings, and landlord contact details. Any valid key not in `TEAM_API_KEYS` is treated as an external partner key and can access listings and GymBuddy memberships only. Keep both variables in `server/.env` or your host's environment settings; never commit real values. See `server/.env.example` for placeholders.
 - A missing or invalid key returns `401 Unauthorized`:
 
 ```json
 { "message": "Missing or invalid API key" }
+```
+
+An authenticated partner key calling a team-only route gets `403 Forbidden`:
+```json
+{ "message": "Insufficient permissions" }
 ```
 
 > **Windows PowerShell:** use `curl.exe` instead of `curl`, because `curl` is an alias for a different command there.
@@ -278,27 +283,31 @@ Deletes a student record.
 ### 4. GymBuddy Partner Amenity
 
 #### `GET /api/gym/memberships`
-Returns GymBuddy membership tiers. The backend calls the GymBuddy partner API and returns only the agreed contract fields `tier`, `price` and `details`; any other field the partner sends is dropped.
+Returns GymBuddy membership tiers. The backend calls the GymBuddy partner API and returns only the agreed contract fields `tier`, `price` and `details`; any other field the partner sends is dropped. A successful response includes `data`, `stale`, and `asOf`. After partner failures, the last successful data is returned with `stale: true`; if no successful data has been cached, the endpoint returns `502`.
 - **Example cURL:**
   ```bash
   curl -H "X-API-Key: YOUR_API_KEY" https://nyumbahub-api-gdit.onrender.com/api/gym/memberships
   ```
 - **Response (`200 OK`):**
   ```json
-  [
-    {
-      "tier": "Daily Drop-In",
-      "price": "500 KES",
-      "details": "Full facility access for 24 hours."
-    },
-    {
-      "tier": "Monthly Standard",
-      "price": "5,000 KES",
-      "details": "Unlimited access + GymBuddy App."
-    }
-  ]
+  {
+    "data": [
+      {
+        "tier": "Daily Drop-In",
+        "price": "500 KES",
+        "details": "Full facility access for 24 hours."
+      },
+      {
+        "tier": "Monthly Standard",
+        "price": "5,000 KES",
+        "details": "Unlimited access + GymBuddy App."
+      }
+    ],
+    "stale": false,
+    "asOf": "2026-11-03T07:11:49.920Z"
+  }
   ```
-- **If the partner is down or returns an error (`502 Bad Gateway`):**
+- **If the partner has failed and no cached data is available (`502 Bad Gateway`):**
   ```json
   { "message": "Partner data unavailable" }
   ```
@@ -421,6 +430,7 @@ DB_PORT=3306
 PORT=5000
 PARTNER_URL=https://partner-api-url.example.com
 API_KEYS=team_key_sample,partner_key_sample
+TEAM_API_KEYS=team_key_sample
 ```
 
 Load sample data:
@@ -433,3 +443,11 @@ Start dev server:
 npm start
 ```
 Server runs at `http://localhost:5000`.
+
+To run the frontend locally, install the root project dependencies and create a root `.env.local` file (ignored by Git) containing an API key that is also listed in `server/.env`:
+```env
+API_PROXY_KEY=your-local-api-key
+API_PROXY_TARGET=http://localhost:5000
+```
+
+Then run `npm run dev` from the repository root and open the URL Vite prints. The Vite development server adds `X-API-Key` while proxying `/api/gym/memberships`; the key stays server-side and is not included in the browser bundle. Do not rename it to a `VITE_` variable. This proxy is for local development only; a production deployment needs its own server-side proxy or user authentication.
