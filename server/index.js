@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
+const { fetchWithRetry } = require('./resilientFetch');
 
 const app = express();
 const port = process.env.PORT || 5000;
@@ -40,13 +41,16 @@ const PARTNER_URL = process.env.PARTNER_URL;
 
 app.get('/api/gym/memberships', async (req, res) => {
   try {
-    const response = await fetch(`${PARTNER_URL}/memberships`, {
-      headers: {
-        'Accept': 'application/json',
-        'X-API-Key': process.env.PARTNER_API_KEY
+    const response = await fetchWithRetry(
+      `${PARTNER_URL}/memberships`,
+      {
+        headers: {
+          'Accept': 'application/json',
+          'X-API-Key': process.env.PARTNER_API_KEY
+        }
       },
-      signal: AbortSignal.timeout(1500)// give up after 1.5 seconds
-    });
+      { timeoutMs: 1500, retries: 2, delayMs: 200 }
+    );
 
     if (!response.ok) {
       console.error('Partner returned status:', response.status);
