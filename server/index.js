@@ -9,12 +9,15 @@ const port = process.env.PORT || 5000;
 
 app.use(cors());
 
-const { requireApiKey } = require('./middleware/auth');
+const { requireApiKey, requireRole } = require('./middleware/auth');
 const rateLimit = require('./middleware/rateLimit');
 
 app.use(requireApiKey);
 // must come after the key check so the limiter can count per API key
 app.use(rateLimit({ windowMs: 60 * 1000, max: 100 }));
+app.use('/api/students', requireRole('team'));
+app.use('/bookings', requireRole('team'));
+app.use('/listings/:id/landlord-contact', requireRole('team'));
 app.use(express.json());
 
 app.get('/', (req, res) => {

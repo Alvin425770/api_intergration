@@ -6,9 +6,14 @@ info:
     REST API for students, housing listings, bookings and the GymBuddy
     partner amenity.
  
-    **Authentication.** Every endpoint except `GET /` requires an API key in
-    the `X-API-Key` request header. A missing or unknown key returns `401`.
+    **Authentication.** Every endpoint except `GET /` and public
+    `GET /api/gym/memberships` requires an API key in the `X-API-Key` request
+    header. A missing or unknown key returns `401`.
     Never share your key publicly; keys are issued privately per consumer.
+    Keys listed in `TEAM_API_KEYS` may use every protected endpoint. Other
+    valid keys are external partner keys and may access listings only;
+    student, booking, and landlord-contact routes return `403` to them.
+    GymBuddy memberships are a public, read-only endpoint.
  
     **Rate limiting.** Requests are limited per API key (100 requests per
     minute). Over the limit the API answers `429` with a `Retry-After` header
@@ -61,6 +66,8 @@ paths:
                   $ref: '#/components/schemas/Student'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '429':
           $ref: '#/components/responses/TooManyRequests'
         '500':
@@ -95,6 +102,8 @@ paths:
                 error: name, email, and course are required
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '429':
           $ref: '#/components/responses/TooManyRequests'
         '500':
@@ -129,6 +138,8 @@ paths:
                 course: Software Engineering
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '429':
           $ref: '#/components/responses/TooManyRequests'
         '500':
@@ -151,6 +162,8 @@ paths:
                   message: Student deleted
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '429':
           $ref: '#/components/responses/TooManyRequests'
         '500':
@@ -221,6 +234,8 @@ paths:
                     contact: null
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/ListingNotFound'
         '429':
@@ -316,6 +331,8 @@ paths:
           $ref: '#/components/responses/InvalidQueryParam'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '429':
           $ref: '#/components/responses/TooManyRequests'
         '500':
@@ -354,6 +371,8 @@ paths:
                   updatedAt: '2026-09-21T19:54:07.000Z'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           description: No booking with that id.
           content:
@@ -370,6 +389,7 @@ paths:
  
   /api/gym/memberships:
     get:
+      security: []
       tags: [GymBuddy]
       summary: GymBuddy membership tiers (proxied from the partner)
       description: |
@@ -410,8 +430,6 @@ paths:
                     details: Unlimited access + GymBuddy App.
                 stale: false
                 asOf: '2026-11-03T07:11:49.920Z'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
         '429':
           $ref: '#/components/responses/TooManyRequests'
         '502':
@@ -466,6 +484,14 @@ components:
             $ref: '#/components/schemas/ErrorMessage'
           example:
             message: Missing or invalid API key
+    Forbidden:
+      description: The API key is valid but is not allowed to use this endpoint.
+      content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorMessage'
+            example:
+              message: Insufficient permissions
     TooManyRequests:
       description: This API key exceeded its rate limit. Wait the number of seconds in `Retry-After`, then retry.
       headers:

@@ -14,9 +14,9 @@ Look for: `password`, `passwordHash`, `token`, `email`, `isAdmin`, `createdBy`, 
 
 **What I found:** 
 - `/listings` and `/bookings` build responses from explicit fields rather than returning raw database rows. Booking responses include refund reason and escrow status.
-- `/listings/:id/landlord-contact` returns a landlord's name, phone, and email only when `opted_in` is true; these are personal contact details and must only be shared under that consent and the API's intended partner access.
-- `/api/students` returns student IDs, names, email addresses, and courses. Email is personal information; the current endpoint contract exposes it to every valid API-key holder. Do not issue keys to callers that do not need student data.
-- GymBuddy membership fields are explicitly mapped to `tier`, `price`, and `details`.
+- `/listings/:id/landlord-contact` returns a landlord's name, phone, and email only when `opted_in` is true, and is now restricted to team API keys.
+- `/api/students` returns student IDs, names, email addresses, and courses. Email is personal information, so all student endpoints are now restricted to team API keys.
+- GymBuddy membership fields are explicitly mapped to `tier`, `price`, and `details`; this read-only endpoint is intentionally public and contains no user-specific information.
 - No password hashes, tokens, or administrative flags are part of the current response schemas.
 
 **Fix (if needed):** Stop returning raw database rows. Build each response from an explicit field list:
@@ -44,7 +44,8 @@ Also confirm that every route that takes an ID uses a **parameterized query** (`
 **What I found:** 
 - Every database query in `students.js`, `listings.js`, and `bookings.js` uses parameterized SQL queries (`?` placeholders with parameter arrays). SQL injection via URL parameters is completely mitigated.
 - Non-existent IDs (e.g., `999999`) cleanly return `404 Not Found` with structured JSON error codes (`listing_not_found`, `booking_not_found`).
-- **Access-control limitation:** API keys identify consumers but do not grant different permissions or scope records. Any valid key can read the exposed listings, opted-in landlord contact details, booking data, and student records, and can call the student write endpoints. There is no tenant/owner relationship check for IDs. This is acceptable only if all issued consumers are trusted to access this shared dataset; it is not per-user or per-record authorization. Add scoped roles and ownership checks before using this API for tenant-private records.
+- **Fix applied:** valid keys in `TEAM_API_KEYS` may use every protected endpoint; other valid keys default to the partner role, which can read listings only. GymBuddy memberships are a public, read-only endpoint. Student records/writes, bookings, and landlord contact details return `403` for partner keys.
+- Team keys still access a shared dataset; the app has no user identity or row-ownership data to enforce per-record access. Do not use team keys for tenant-private records without adding ownership checks.
 
 ---
 
@@ -104,6 +105,7 @@ If record 9999 exists, or `isAdmin` was stored, the endpoint is vulnerable.
 | Item | Result |
 |------|--------|
 | API keys hard-coded in auth middleware | No; it reads `API_KEYS` from the process environment |
+| Team-only permissions | Configured by the `TEAM_API_KEYS` subset |
 | `server/.env` present in this checkout | No; configure deployment/local server environment separately |
 | Local Vite `.env.local` | Ignored by Git; contains a local development proxy key only |
 | Current key count, strength, and partner URL | Not reverified; no `server/.env` is present in this checkout |
@@ -123,6 +125,7 @@ grep -rn "X-API-Key" README.md openapi.yaml  # placeholders only (<your-api-key>
 - `server/.env.example` contains only placeholder values (`API_KEYS=key1,key2`, `DB_PASSWORD=your_mysql_password`).
 - Documentation files (`README.md`, `openapi.yaml`) use placeholder `<your-api-key>` values and never expose live credentials.
 - API-key authentication and rate-limit middleware do not log the supplied API-key header.
+- Unknown valid keys default to the partner role, not team access. Team access is opt-in by adding the key to `TEAM_API_KEYS`.
 
 ---
 
@@ -133,6 +136,9 @@ grep -rn "X-API-Key" README.md openapi.yaml  # placeholders only (<your-api-key>
 | No key: `curl -i http://localhost:5000/listings` | 401 | `HTTP/1.1 401 Unauthorized` (`{"message":"Missing or invalid API key"}`) |
 | Wrong key: `-H "X-API-Key: wrong-key"` | 401 | `HTTP/1.1 401 Unauthorized` (`{"message":"Missing or invalid API key"}`) |
 | Valid key: `-H "X-API-Key: <valid-key>"` | 200 | `HTTP/1.1 200 OK` (returns JSON payload) |
+| Partner key: `GET /api/students` or `GET /bookings` | 403 | `{"message":"Insufficient permissions"}` |
+| Partner key: `GET /listings?status=available&updatedSince=2026-01-01` | 200 | Listing access remains available to partners |
+| No key: `GET /api/gym/memberships` | 200 | Public membership data; no personal records returned |
 | 5 requests with limit set to 3 | `200 200 200 429 429` | `200 200 200 429 429` (Throttled on 4th & 5th request) |
 | 429 has `Retry-After` header and JSON body | Yes | `Retry-After: 60`, `{"message":"Too many requests","retryAfter":60}` |
 
@@ -151,9 +157,10 @@ grep -rn "X-API-Key" README.md openapi.yaml  # placeholders only (<your-api-key>
 | 3 | Unbounded requests / loop risk | High | Fixed | Implemented `rateLimiter` (100 req/min) returning HTTP 429 with `Retry-After` header. |
 | 4 | Potential credential leakage | Critical | Fixed | Enforced `.env` in `.gitignore`, committed `.env.example` with placeholders only. |
 | 5 | Downstream partner key sharing | Medium | Completed | Generated distinct 24-byte crypto keys; transmitted partner key privately via DM. |
-| 6 | API keys do not scope access to individual records or read/write permissions | Medium | Open | Recorded as an access-model limitation; implement per-consumer scopes and ownership checks before using private multi-tenant data. |
-| 7 | Default malformed-JSON errors could include HTML/stack details in development | Low | Fixed | Authenticate before parsing; return sanitized JSON errors and generic JSON 404 responses. |
-| 8 | Raw database errors could include SQL details or bound values in server logs | Low | Fixed | Log operation plus database error code/name instead of dumping the raw error object. |
+| 6 | All valid API keys previously shared read/write access | High | Fixed | Added opt-in team role via `TEAM_API_KEYS`; other keys default to listing-only access, and GymBuddy memberships are explicitly public. |
+| 7 | Team dataset has no per-record ownership checks | Medium | Open | Role restrictions protect sensitive endpoint groups from external partner keys; add user/tenant identity and ownership checks before exposing tenant-private records. |
+| 8 | Default malformed-JSON errors could include HTML/stack details in development | Low | Fixed | Authenticate before parsing; return sanitized JSON errors and generic JSON 404 responses. |
+| 9 | Raw database errors could include SQL details or bound values in server logs | Low | Fixed | Log operation plus database error code/name instead of dumping the raw error object. |
 
 ---
 
@@ -162,20 +169,20 @@ grep -rn "X-API-Key" README.md openapi.yaml  # placeholders only (<your-api-key>
 | # | Fix | Done |
 |---|-----|------|
 | 1 | Generated distinct 24-byte hex API keys for team and ring partner (`node crypto.randomBytes`) | [x] |
-| 2 | Confirmed `.env` is listed in `.gitignore` and does not appear in `git status` or git history | [x] |
-| 3 | Added `.env.example` with placeholder values only (`API_KEYS=key1,key2`) | [x] |
+| 2 | Confirmed local credential files are ignored and not tracked; reviewed historical `server/.env` without recording values | [x] |
+| 3 | Added `.env.example` with placeholder keys and a `TEAM_API_KEYS` permission subset | [x] |
 | 4 | Enforced API key verification (`X-API-Key`) across all endpoints with 401 rejection | [x] |
 | 5 | Enforced rate limiting (100 req/min) with HTTP 429 and `Retry-After` header | [x] |
 | 6 | Verified error responses return structured JSON without stack traces or SQL errors | [x] |
 | 7 | Verified write endpoints (`POST`/`PUT`) strictly whitelist allowed input attributes | [x] |
 | 8 | Updated OpenAPI contract and README with security schemes, 401 & 429 response definitions | [x] |
-| 9 | Confirmed full test suite passes with auth coverage | [x] |
+| 9 | Added role-scope regression tests for partner keys and confirmed the full API suite passes | [x] |
 
 ---
 
 ## Remaining risks & Architecture Notes
 
-- **Single access level and shared records:** Any valid API key can access the shared API dataset and student write endpoints. Do not use this model for tenant-private records; implement per-consumer permissions and record ownership checks first.
-- **Personal information:** Student email addresses and opted-in landlord contact details are exposed by the documented API contract. Issue keys only to trusted consumers with a need for these fields, and review retention/sharing obligations.
+- **Shared team records:** Team keys can access the shared API dataset. The service has no tenant identity or ownership field, so it cannot enforce per-user row access. Add that model before using this API for tenant-private records.
+- **Personal information:** Student email addresses and opted-in landlord contact details are limited to team keys. Issue team keys only to trusted team services/users with a need for these fields, and review retention/sharing obligations.
 - **In-memory store:** Rate limiter resets on process restart. Production deployments should back this with Redis or Memcached.
 - **Key lifecycle:** API keys are static without automatic expiration; revocation requires updating the environment variable.
