@@ -1,8 +1,6 @@
 # Resilience Notes — Week 11
-# Alvin Bogonko
-# michael Otunga
-# mark Jeremy Gichohi
-# Peacemary Njeri
+
+**Team:** Alvin Bogonko, Michael Otunga, Mark Jeremy Gichohi, Peacemary Njeri
 
 ## Part A: "Before" Pictures (Baseline & Unhandled Failures)
 
@@ -35,3 +33,44 @@
 * **Client Response:** Received HTTP `502` with `{"message": "Partner data unavailable"}`.
 * **Server Log Output:** Logged `Partner call failed: timeout`.
 * **Conclusion:** The AbortSignal timeout successfully severed the hanging connection and protected our application from being held hostage by a slow partner.
+
+## Part C: Retry Logic
+* **Settings:** at most 2 retries, 200 ms then 400 ms between attempts, `Retry-After` honored on a 429 (up to 5 s). 4xx errors and writes (POST/PUT/PATCH/DELETE) are never retried.
+* **Worst-case wait:** (2 + 1) x 1500 + 200 + 400 = **5100 ms**. <Is more than five seconds acceptable for our feature? Decision and reason: Peacemary / Alvin>
+* **Flaky mode proof:** <page succeeded; paste the two "retrying" lines per load>
+* **Error mode proof (always 500):** <exactly two retries, then failure; paste terminal lines>
+
+## Part D: Graceful Fallback
+* **ok mode:** <live data, no banner>
+* **slow mode (after a successful load):** <saved data plus banner after about 5 seconds>
+* **slow mode after a server restart (saved copy cleared):** <friendly "unavailable" message, no crash>
+* **Screenshot of the fallback state with the partner stopped:** <file name>
+
+## Part E: Real Partner Drill
+* **Partner team and agreed window:** <team, time>
+* **Normal:** <live data>
+* **Partner stopped:** <saved data plus banner, time it took>
+* **Partner back:** <live data again, banner gone, no code changed>
+* **Hits per page load seen in their terminal:** <at most 3>
+* **Calls our own server received from our downstream partner:** <not a flood, within our Week 9 rate limit>
+
+## Part F: Test Table
+| Failure | User saw | Log said |
+|---|---|---|
+| Partner slow (Part B, before fallback) | HTTP 502 `{"message": "Partner data unavailable"}` after about 1.5 s instead of 10 s | `Partner call failed: timeout` |
+| Partner slow (after fallback) | <saved data plus banner, after about 5 s> | <timeout lines, retries> |
+| Partner flaky | <live data, no failure visible> | <two retrying lines per load> |
+| Partner stopped | <saved data plus banner, or friendly message> | <e.g. `ECONNREFUSED`> |
+| <one more of our choice, e.g. always 500> | <...> | <exactly two retries, then failure> |
+
+## Our Numbers, and Why
+* **Timeout:** 1500 ms, chosen because the measured normal response was about 13 ms, so 1500 ms leaves plenty of room while staying below the point where users give up.
+* **Retries:** 2, the lab maximum, so one page load makes at most 3 calls to the partner.
+* **Delay:** 200 ms, then 400 ms (doubling each attempt), so a struggling partner is not hit in a tight loop.
+* **Worst-case wait:** 5100 ms (see Part C).
+
+## What a Real User Would Experience Without This Code
+<4 to 6 sentences, specific to our feature. Name the screen, how long the user waits, and what they do next.>
+
+## What We Did Not Build
+A circuit breaker is a switch that stops calling a partner that has been failing for a while, and tests it occasionally. Ours still tries every request three times, so when the partner is down every page load can wait the full worst-case time, whereas a circuit breaker would skip the calls and show the saved data straight away.
