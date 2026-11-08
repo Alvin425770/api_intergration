@@ -381,6 +381,111 @@ Failed requests return an HTTP status with a JSON error payload:
 
 ---
 
+## 📊 Monitoring & Observability (`/stats` and Logs)
+
+The API includes lightweight real-time observability middleware that logs every request and tracks running performance metrics in memory.
+
+### 1. The `/stats` Endpoint
+
+Returns running traffic totals, client/server error counts, average response times, and per-route breakdowns since server boot.
+
+- **Method:** `GET`
+- **Route:** `/stats`
+- **Authentication:** Required (`X-API-Key: <your-api-key>`)
+
+#### Example Request:
+```bash
+curl -H "X-API-Key: <your-api-key>" "https://nyumbahub-api-gdit.onrender.com/stats"
+```
+*(For local testing: `curl -H "X-API-Key: <your-api-key>" "http://localhost:5000/stats"`)*
+
+#### Example Response (`200 OK`):
+```json
+{
+  "startedAt": "2026-11-06T12:33:08.064Z",
+  "uptimeSeconds": 231,
+  "total": 64,
+  "clientErrors": 31,
+  "serverErrors": 0,
+  "errorRatePercent": 0,
+  "avgMs": 197.1,
+  "routes": {
+    "GET /listings/:id/location": {
+      "count": 19,
+      "clientErrors": 10,
+      "serverErrors": 0,
+      "avgMs": 329.6,
+      "maxMs": 2261.8
+    },
+    "GET /api/gym/memberships": {
+      "count": 9,
+      "clientErrors": 0,
+      "serverErrors": 0,
+      "avgMs": 401.1,
+      "maxMs": 750.3
+    },
+    "GET (no route)": {
+      "count": 21,
+      "clientErrors": 21,
+      "serverErrors": 0,
+      "avgMs": 0.6,
+      "maxMs": 1.1
+    },
+    "GET /listings/": {
+      "count": 12,
+      "clientErrors": 0,
+      "serverErrors": 0,
+      "avgMs": 227.2,
+      "maxMs": 242.8
+    }
+  }
+}
+```
+
+### 2. Request Logging & Anonymization
+
+Every request is logged as a single structured JSON line containing the timestamp, HTTP method, path, status code, response time in ms, and an anonymized SHA-256 fingerprint label for the caller (`key-xxxxxx` or `"none"`). Raw API keys, passwords, query strings, and request/response bodies are **never** logged.
+
+#### Example Log Line:
+```json
+{"time":"2026-11-06T12:33:08.125Z","method":"GET","path":"/listings","status":200,"ms":5.2,"caller":"key-dc87f9"}
+```
+
+### 3. How to Capture and Inspect Logs Locally
+
+1. **Start the server with output copied to a log file:**
+   - **Git Bash / Linux / macOS:**
+     ```bash
+     node server/index.js | tee requests.log
+     ```
+   - **PowerShell:**
+     ```powershell
+     node server/index.js | Tee-Object -FilePath requests.log
+     ```
+
+2. **Generate test traffic without hardcoding keys:**
+   Run `traffic.js` by passing your API key via environment variable:
+   - **Git Bash / Linux / macOS:**
+     ```bash
+     KEY=<your-api-key> node traffic.js
+     ```
+   - **PowerShell:**
+     ```powershell
+     $env:KEY="<your-api-key>"; node traffic.js
+     ```
+
+3. **Inspect the logs:**
+   - Read the last 20 log entries:
+     ```bash
+     tail -n 20 requests.log
+     ```
+   - Verify that your secret key is never leaked into the log file (must print `0`):
+     ```bash
+     grep -c "<your-api-key>" requests.log
+     ```
+
+---
+
 ## 🧪 Automated Regression Tests
 
 The tests use Node's built-in test runner, so there is nothing extra to install. From the project root:
