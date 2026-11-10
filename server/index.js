@@ -33,10 +33,17 @@ const studentRoutes = require('./routes/students');
 app.use('/api/students', studentRoutes);
 
 const listingRoutes = require('./routes/listings');
-app.use('/listings', listingRoutes);
 
 const bookingRoutes = require('./routes/bookings');
 app.use('/bookings', bookingRoutes);
+
+// versioned listings API
+const v1Listings = require('./routes/listings/v1');
+const v2Listings = require('./routes/listings/v2');
+// mount v2 first, then v1, then un-versioned fallback
+app.use('/v2/listings', v2Listings);
+app.use('/v1/listings', v1Listings);
+app.use('/listings', v1Listings);     // existing clients keep working
 
 const PARTNER_URL = process.env.PARTNER_URL;
 let lastGoodMemberships = null;
