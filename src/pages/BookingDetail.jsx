@@ -1,3 +1,4 @@
+import GymPerkClaim from '../components/GymPerkClaim';
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { listings } from '../mock-data';
@@ -106,6 +107,12 @@ function BookingDetail() {
             <div className="booking-receipt-row"><span>Reference</span><span>NH-{Math.floor(100000 + Math.random() * 900000)}</span></div>
             <div className="booking-receipt-total"><span>Amount Held in Escrow</span><span>{formatCurrency(bookingFee)}</span></div>
           </div>
+
+          <GymPerkClaim
+            tenantName={formData.name}
+            tenantEmail={formData.email}
+            tenantPhone={formData.phone || activeWalletNumber}
+          />
 
           <p className="booking-confirm-note">
             Funds are held in escrow for up to {escrowHoldingDays} days and only released to the

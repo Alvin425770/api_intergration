@@ -1,7 +1,6 @@
 import { listings } from '../mock-data';
 import ListingsMap from '../components/ListingsMap';
 import './Home.css';
-import GymPerks from '../components/GymPerks';
 
 function Home() {
   const featured = listings.slice(0, 3);
@@ -83,8 +82,7 @@ function Home() {
           ))}
         </div>
       </section>
-       {/*partner intergration section*/}
-    <GymPerks/>
+       
     </div>
 
     

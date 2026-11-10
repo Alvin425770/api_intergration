@@ -13,7 +13,7 @@ async function fetchWithRetry(url, options = {}, config = {}) {
                 ...options,
                 signal: AbortSignal.timeout(timeoutMs),
             });
-            if (!RETRY_STATUSES.has(res.status) || attempt >=maxRetries) return res;
+            if (!RETRY_STATUSES.has(res.status) || attempt >= maxRetries) return res;
 
             const retryAfter = Number(res.headers.get('Retry-After'));
             if (res.status === 429 && retryAfter > 0) {
@@ -22,7 +22,7 @@ async function fetchWithRetry(url, options = {}, config = {}) {
         } catch (err) {
             if (attempt >= maxRetries) throw err; //out of retries
         }
-        console.warn(`attempt ${attempt + 1} failed, retrying in ${wait}ms`);
+        console.warn(`Partner request failed; retrying in ${wait} ms`);
         await sleep(wait);
     }
 }
