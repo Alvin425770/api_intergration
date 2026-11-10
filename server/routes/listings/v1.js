@@ -1,7 +1,13 @@
-// v1.js — FROZEN. Do not change the shape of anything in this file.
+// v1.js - FROZEN. Do not change the shape of anything in this file.
 const express = require('express');
 const router = express.Router();
 const db = require('../../db');
+const deprecate = require('../../middleware/deprecate');
+
+router.use(deprecate({
+  sunset: '2026-12-31',               // replace with the date in Mike's DEPRECATION_NOTICE.md
+  link: '/DEPRECATION_NOTICE.md'      // or the notice's GitHub URL
+}));
 
 // GET /listings?status=available&updatedSince=...  (original shape)
 router.get('/', async (req, res) => {
