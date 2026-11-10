@@ -14,10 +14,10 @@ const TEAM_KEYS = new Set(
 );
 
 function requireApiKey(req, res, next) {
-    // Keep the health check and public read-only memberships endpoint open.
+    // Keep health check and public partner amenity endpoints open for frontend consumers.
     if (
-        req.method === 'GET' &&
-        (req.path === '/' || req.path === '/api/gym/memberships')
+        (req.method === 'GET' && (req.path === '/' || req.path.startsWith('/api/gym/'))) ||
+        (req.method === 'POST' && req.path === '/api/gym/register')
     ) {
         return next();
     }

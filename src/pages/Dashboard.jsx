@@ -1,3 +1,4 @@
+import GymPassCard from '../components/GymPassCard';
 import { useState } from "react";
 import { useAuth } from "../context/AuthContext.jsx";
 import { listings as initialListings } from "../mock-data";
@@ -164,9 +165,24 @@ export default function Dashboard() {
 
   const bookings = []; // TODO: connect once Mike's bookings array exists in mock-data.js
 
+  const activeGymPass = (() => {
+    try {
+      return JSON.parse(localStorage.getItem('nyumbahub_active_gym_pass'));
+    } catch (_) {
+      return null;
+    }
+  })();
+
   return (
     <div className="dashboard">
       <h2>My Dashboard</h2>
+
+      {activeGymPass && (
+        <div style={{ marginTop: '1.25rem' }}>
+          <GymPassCard passData={activeGymPass} />
+        </div>
+      )}
+
       <h3>Saved Listings</h3>
       <p>No saved listings yet</p>
       <h3>My Bookings</h3>

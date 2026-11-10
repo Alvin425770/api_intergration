@@ -13,7 +13,7 @@ export default defineConfig(({ mode }) => {
     plugins: [react()],
     server: {
       proxy: {
-        '/api/gym/memberships': {
+        '/api': {
           target: env.API_PROXY_TARGET || 'http://localhost:5000',
           changeOrigin: true,
           headers: apiKey ? { 'X-API-Key': apiKey } : {},
