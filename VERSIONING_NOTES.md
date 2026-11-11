@@ -10,6 +10,8 @@ Our API uses a different wrapper key on every list endpoint (`listings`, `bookin
 
 ## 3. Prediction
 
-Our partner FundiLink calls `GET /listings`. I have asked them for the file and the exact line, and will fill it in when they reply (pending).
+Our partner FundiLink calls `GET /listings` in `server/routes/partner.js` (route `GET /partner/vacant-homes`). The line that will fail is:
 
-Expected failure: any code that reads the `listings` key from the response, such as `body.listings` or `const { listings } = await res.json()`. After the change that key no longer exists, so the value is `undefined` and the next step (`.map` or `.filter`) throws.
+`listings = ver.parseList(body);`
+
+Their v1 `parseList` (in `partnerVersions.js`) reads the `listings` key from our response. After the change that key no longer exists, so the parser throws. Their route catches it, logs `partner call failed`, and shows saved data marked `stale: true` (or a 502 if nothing is saved), so the page keeps working but quietly shows old data.
