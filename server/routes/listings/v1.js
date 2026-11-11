@@ -4,13 +4,13 @@ const router = express.Router();
 const db = require('../../db');
 const deprecate = require('../../middleware/deprecate');
 
-router.use(deprecate({
+const deprecation = deprecate({
   sunset: '2026-12-31',               // replace with the date in Mike's DEPRECATION_NOTICE.md
   link: '/DEPRECATION_NOTICE.md'      // or the notice's GitHub URL
-}));
+});
 
 // GET /listings?status=available&updatedSince=...  (original shape)
-router.get('/', async (req, res) => {
+router.get('/', deprecation, async (req, res) => {
   const { status, updatedSince } = req.query;
 
   if (!status || !updatedSince) {

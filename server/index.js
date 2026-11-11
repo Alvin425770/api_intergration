@@ -44,6 +44,7 @@ const v2Listings = require('./routes/listings/v2');
 app.use('/v2/listings', v2Listings);
 app.use('/v1/listings', v1Listings);
 app.use('/listings', v1Listings);     // existing clients keep working
+app.use('/listings', listingRoutes);  // location, size, landlord-contact
 
 const PARTNER_URL = process.env.PARTNER_URL;
 let lastGoodMemberships = null;
