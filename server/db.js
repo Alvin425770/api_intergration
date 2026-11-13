@@ -10,6 +10,7 @@ const poolConfig = {
   port: process.env.DB_PORT || 3306,
   waitForConnections: true,
   connectionLimit: 10,
+  enableKeepAlive: true,
 };
 
 // Enable SSL automatically for cloud databases like TiDB
@@ -20,6 +21,17 @@ if (process.env.DB_SSL === 'true' || (process.env.DB_HOST && process.env.DB_HOST
   };
 }
 
-const pool = mysql.createPool(poolConfig);
+const pool = mysql.createPool(poolConfig).promise();
+const transientConnectionErrors = new Set(['ECONNRESET', 'PROTOCOL_CONNECTION_LOST', 'EPIPE']);
 
-module.exports = pool.promise();
+async function query(sql, values) {
+  try {
+    return await pool.query(sql, values);
+  } catch (err) {
+    const retryableRead = /^\s*SELECT\b/i.test(sql) && transientConnectionErrors.has(err.code);
+    if (!retryableRead) throw err;
+    return pool.query(sql, values);
+  }
+}
+
+module.exports = { query };

@@ -5,8 +5,8 @@ const db = require('../../db');
 const deprecate = require('../../middleware/deprecate');
 
 router.use(deprecate({
-  sunset: '2026-12-31',               // replace with the date in Mike's DEPRECATION_NOTICE.md
-  link: '/DEPRECATION_NOTICE.md'      // or the notice's GitHub URL
+  sunset: '2026-11-13',
+  successor: '/v2/listings'
 }));
 
 // GET /listings?status=available&updatedSince=...  (original shape)

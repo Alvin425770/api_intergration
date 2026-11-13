@@ -556,3 +556,44 @@ API_PROXY_TARGET=http://localhost:5000
 ```
 
 Then run `npm run dev` from the repository root and open the URL Vite prints. The Vite development server adds `X-API-Key` while proxying `/api/gym/memberships`; the key stays server-side and is not included in the browser bundle. Do not rename it to a `VITE_` variable. This proxy is for local development only; a production deployment needs its own server-side proxy or user authentication.
+
+### Week 13 class demonstration
+
+From the repository root in Git Bash, start both applications in the first terminal:
+
+```bash
+./run.sh
+```
+
+Keep that terminal running. In a second Git Bash terminal, load the local team key without printing it and run the verified successful API flows:
+
+```bash
+set -a
+source server/.env
+set +a
+
+BASE=http://localhost:5000
+TEAM_KEY=${TEAM_API_KEYS%%,*}
+paths=(
+  "/v1/listings?status=available&updatedSince=2020-01-01"
+  "/v2/listings?status=available&updatedSince=2020-01-01"
+  "/listings?status=available&updatedSince=2020-01-01"
+  "/v1/listings/1/location"
+  "/listings/1/location"
+  "/listings/1/size"
+  "/listings/1/landlord-contact"
+  "/bookings?status=refunded&updatedSince=2020-01-01"
+  "/bookings/1/escrow-status"
+  "/api/students"
+  "/stats"
+)
+
+for path in "${paths[@]}"; do
+  curl -fsS -H "X-API-Key: $TEAM_KEY" "$BASE$path"
+  printf '\n'
+done
+
+curl -fsS "$BASE/api/gym/memberships"
+```
+
+The two listings versions return their expected shapes, all commands above returned HTTP 200 in the live local verification, and GymBuddy intentionally remains on v1 for this lab demonstration.

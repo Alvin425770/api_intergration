@@ -26,7 +26,7 @@ v1 `GET /listings`
 ```json
 {
   "listings": [
-    { "id": 1, "status": "active", "reason": "New listing", "updatedAt": "2026-11-02T09:00:00Z" }
+    { "id": "1", "status": "available", "reason": "vacated", "updatedAt": "2026-09-21T19:54:06.000Z" }
   ]
 }
 ```
@@ -36,7 +36,7 @@ v2 `GET /v2/listings`
 ```json
 {
   "data": [
-    { "id": 1, "status": "active", "reason": "New listing", "updatedAt": "2026-11-02T09:00:00Z" }
+    { "id": "1", "status": "available", "reason": "vacated", "updatedAt": "2026-09-21T19:54:06.000Z" }
   ],
   "count": 1
 }
@@ -44,7 +44,7 @@ v2 `GET /v2/listings`
 
 ## How to migrate
 
-1. Call `/v2/listings` instead of `/listings`. Same API key, same headers.
+1. Call `/v2/listings` instead of `/listings`. Use the same API key, headers, and required `status=available` and `updatedSince` query parameters.
 2. Read the array from `body.data` instead of `body.listings`.
 3. Optionally use `body.count` instead of calling `.length` yourself.
 4. Test it, then tell me, so I can see your calls to `GET /v2/listings` in my logs.

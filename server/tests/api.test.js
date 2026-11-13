@@ -180,6 +180,15 @@ describe('API key authentication', () => {
     assert.equal(r.json.message, 'Missing or invalid API key');
   });
 
+  test('v2 listings require an API key like v1', async () => {
+    const anonymous = await api(MAIN_PORT, '/v2/listings');
+    assert.equal(anonymous.status, 401);
+
+    const authenticated = await api(MAIN_PORT, '/v2/listings', { key: KEYS.auth });
+    assert.equal(authenticated.status, 400);
+    assert.equal(authenticated.json.code, 'invalid_query_param');
+  });
+
   test('partner keys can access published listings but not student records', async () => {
     const listing = await api(MAIN_PORT, '/listings', { key: KEYS.partner });
     assert.equal(listing.status, 400, 'valid partner key reaches listing query validation');
@@ -195,6 +204,9 @@ describe('API key authentication', () => {
 
     const contact = await api(MAIN_PORT, '/listings/1/landlord-contact', { key: KEYS.partner });
     assert.equal(contact.status, 403);
+
+    const versionedContact = await api(MAIN_PORT, '/v1/listings/1/landlord-contact', { key: KEYS.partner });
+    assert.equal(versionedContact.status, 403);
   });
 
   test('partner keys cannot write student records', async () => {
@@ -340,6 +352,7 @@ describe('input validation', () => {
 
     assert.equal(r.status, 404);
     assert.deepEqual(r.json, { message: 'Not found' });
+    assert.equal(r.headers.get('deprecation'), null);
   });
 });
 

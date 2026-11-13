@@ -21,6 +21,7 @@ app.use(rateLimit({ windowMs: 60 * 1000, max: 100 }));
 app.use('/api/students', requireRole('team'));
 app.use('/bookings', requireRole('team'));
 app.use('/listings/:id/landlord-contact', requireRole('team'));
+app.use('/v1/listings/:id/landlord-contact', requireRole('team'));
 app.use(express.json());
 
 app.get('/stats', statsHandler);
@@ -43,7 +44,9 @@ const v2Listings = require('./routes/listings/v2');
 // mount v2 first, then v1, then un-versioned fallback
 app.use('/v2/listings', v2Listings);
 app.use('/v1/listings', v1Listings);
-app.use('/listings', v1Listings);     // existing clients keep working
+app.use('/v1/listings', listingRoutes);
+app.use('/listings', v1Listings);
+app.use('/listings', listingRoutes);
 
 const PARTNER_URL = process.env.PARTNER_URL;
 let lastGoodMemberships = null;
