@@ -10,13 +10,26 @@ const rows = [
 ];
 require.cache[dbPath] = {
   id: dbPath, filename: dbPath, loaded: true,
-  exports: { query: async () => [rows] }
+  exports: {
+    query: async (sql) => {
+      if (sql.startsWith('SELECT area, city')) {
+        return [[{ area: 'Kilimani', city: 'Nairobi' }]];
+      }
+      if (sql.startsWith('SELECT bedrooms, bathrooms')) {
+        return [[{ bedrooms: 2, bathrooms: 1 }]];
+      }
+      return [rows];
+    }
+  }
 };
 
 const app = express();
+const legacyListings = require('../routes/listings');
 app.use('/v2/listings', require('../routes/listings/v2'));
 app.use('/v1/listings', require('../routes/listings/v1'));
+app.use('/v1/listings', legacyListings);
 app.use('/listings', require('../routes/listings/v1'));
+app.use('/listings', legacyListings);
 
 let server, base;
 before(() => new Promise(resolve => {
@@ -60,11 +73,11 @@ test('reason mapping: rented -> vacated, otherwise newly_listed', async () => {
   assert.equal(body.data[1].reason, 'newly_listed');
 });
 
-test('v1 sends deprecation headers', async () => {
+test('v1 sends the notice sunset and v2 successor headers', async () => {
   const res = await fetch(`${base}/v1/listings${Q}`);
   assert.equal(res.headers.get('deprecation'), 'true');
-  assert.ok(!Number.isNaN(Date.parse(res.headers.get('sunset'))));
-  assert.match(res.headers.get('link'), /rel="deprecation"/);
+  assert.equal(res.headers.get('sunset'), 'Fri, 13 Nov 2026 00:00:00 GMT');
+  assert.equal(res.headers.get('link'), '</v2/listings>; rel="successor-version"');
 });
 
 test('un-versioned /listings fallback also sends deprecation headers', async () => {
@@ -77,9 +90,47 @@ test('v2 does NOT send deprecation headers', async () => {
   assert.equal(res.headers.get('deprecation'), null);
 });
 
-test('v1 still returns 400 for missing params', async () => {
+test('un-versioned listings return exactly the v1 body', async () => {
+  const legacy = await fetch(`${base}/listings${Q}`);
+  const v1 = await fetch(`${base}/v1/listings${Q}`);
+  assert.equal(legacy.status, 200);
+  assert.deepEqual(await legacy.json(), await v1.json());
+});
+
+test('legacy listing subroutes remain available beside versioned lists', async () => {
+  for (const prefix of ['/listings', '/v1/listings']) {
+    const location = await fetch(`${base}${prefix}/1/location`);
+    assert.equal(location.status, 200);
+    assert.deepEqual(await location.json(), { area: 'Kilimani', city: 'Nairobi' });
+    assert.equal(location.headers.get('deprecation'), 'true');
+
+    const size = await fetch(`${base}${prefix}/1/size`);
+    assert.equal(size.status, 200);
+    assert.deepEqual(await size.json(), { bedrooms: 2, bathrooms: 1 });
+  }
+});
+
+test('unknown paths do not send deprecation headers', async () => {
+  const res = await fetch(`${base}/nope`);
+  assert.equal(res.status, 404);
+  assert.equal(res.headers.get('deprecation'), null);
+});
+
+test('v2 keeps the required query validation', async () => {
+  const missing = await fetch(`${base}/v2/listings`);
+  assert.equal(missing.status, 400);
+  assert.equal((await missing.json()).code, 'invalid_query_param');
+
+  const unsupported = await fetch(`${base}/v2/listings?status=rented&updatedSince=2020-01-01`);
+  assert.equal(unsupported.status, 400);
+});
+
+test('v1 still returns the complete original error shape', async () => {
   const res = await fetch(`${base}/v1/listings`);
   const body = await res.json();
   assert.equal(res.status, 400);
-  assert.equal(body.code, 'invalid_query_param');
+  assert.deepEqual(body, {
+    code: 'invalid_query_param',
+    message: 'status and updatedSince are required query parameters'
+  });
 });
