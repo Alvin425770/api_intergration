@@ -21,3 +21,6 @@ Wrapping the membership array inside a `{ data, count }` structure enables us to
   [
     { "tier": "Monthly Standard", "price": "5,000 KES", "details": "Unlimited access + GymBuddy App." }
   ]
+  ```
+
+* **v2 GET /memberships:** _Not provided in the original notice. GymBuddy did not include an "after" example, and `/v2/memberships` returned HTTP 404 when we checked on 13 November 2026 (see `VERSIONING_NOTES.md` §5)._
