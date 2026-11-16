@@ -1,5 +1,6 @@
 import { listings } from '../mock-data';
 import ListingsMap from '../components/ListingsMap';
+import GymPerks from '../components/GymPerks';
 import './Home.css';
 
 function Home() {
@@ -82,7 +83,8 @@ function Home() {
           ))}
         </div>
       </section>
-       
+
+      <GymPerks />
     </div>
 
     
