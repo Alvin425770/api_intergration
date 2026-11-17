@@ -27,3 +27,14 @@ The live demonstration was rehearsed and verified in three distinct steps:
 1. **Live Partner Data**: NyumbaHub home page displays active GymBuddy membership plans fetched dynamically through the Express backend proxy.
 2. **Upstream Failure (Resilience)**: With the partner simulated as down, the NyumbaHub home page remains fully responsive, displays the friendly notice banner, and prevents any unhandled application crashes.
 3. **Partner Recovery**: Once the partner connection is restored, the application immediately recovers and displays the live cards without requiring code changes.
+
+---
+
+## Week 13 — Versioning and Deprecation
+
+| # | Symptom / What was tested | Root cause | Change / Outcome | Whose code, and who fixed it |
+|---|---|---|---|---|
+| 7 | NyumbaHub needed to change the listings list wrapper without breaking existing consumers | The old `{ listings }` wrapper was inconsistent with other list APIs and did not leave room for paging | Added `/v2/listings` with `{ data, count }`, retained `/v1/listings` and `/listings`, restored legacy detail subroutes, and added matching deprecation headers. The live before/after diff was empty. | NyumbaHub provider code / Fixed and verified by NyumbaHub |
+| 8 | A GymBuddy deprecation notice announced a `{ data, count }` wrapper and `price` to `rate` rename | Intentional upstream breaking-change exercise | Tested both URLs with the configured key before editing the integration. v1 returned 200; the expected v2 URL returned 404. We intentionally kept the consumer on v1 for the demonstration and do not claim a completed v2 migration. Nothing broke silently because the notice warned us first. | Upstream GymBuddy contract / Verified by NyumbaHub; consumer remains on v1 by decision |
+| 9 | Existing clients still needed listing location, size, and landlord-contact routes after versioning | The first v1/v2 mount replaced the original listings router | Re-mounted the unchanged legacy handlers beside the versioned list handlers and added regression tests for both `/listings` and `/v1/listings` subroutes. | NyumbaHub routing code / Fixed by NyumbaHub |
+| 10 | Full local demonstration rehearsal on 13 November | Initial live checks exposed a missing local team-key role and an idle TiDB `ECONNRESET`; mocked tests had not exposed either | Configured a separate local team key and added a one-time retry for read-only transient database failures. Final result: all 49 tests passed, all 13 planned curl flows returned HTTP 200, GymBuddy v1 returned live data with `stale: false`, the v1 diff was empty, and the browser homepage/login/listings/search/details flows worked without console errors. | NyumbaHub configuration, database access, and frontend / Fixed and verified by NyumbaHub |
