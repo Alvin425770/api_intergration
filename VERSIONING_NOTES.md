@@ -26,7 +26,7 @@ GymBuddy's notice was clear about the new `{ data, count }` wrapper, the `price`
 
 ## 6. Who still uses v1
 
-A fresh local `/stats` capture on 13 November recorded two successful `GET /v1/listings/` calls from our anonymized verification caller `key-d70ac0`. There were no rows for `GET /listings/` or `GET /v2/listings/` at that point. No FundiLink traffic appeared in this fresh local capture, so it is not evidence that all downstream consumers have migrated. We cannot safely switch v1 off based on this sample and will keep it running through Demo Day.
+A fresh local `/stats` capture on 13 November recorded two successful `GET /v1/listings/` calls from our anonymized verification caller `key-d70ac0`. There were no rows for `GET /listings/` or `GET /v2/listings/` at that point. No FundiLink traffic appeared in this fresh local capture, so it is not evidence that all downstream consumers have migrated. We cannot safely switch v1 off based on this sample and will keep it running through Demo Day. This means v1 is now running past the 13 November date in its `Sunset` header. We chose to leave the header unchanged and add a dated note to `DEPRECATION_NOTICE.md` explaining the extension, rather than quietly moving the date.
 
 ## 7. Reflection
 

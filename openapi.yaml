@@ -172,7 +172,14 @@ paths:
   /listings:
     get:
       tags: [Listings]
-      summary: Listings that changed to available since a given date
+      summary: Listings that changed to available since a given date (v1, deprecated)
+      deprecated: true
+      description: |
+        Unversioned alias of `GET /v1/listings`. Deprecated in favour of
+        `GET /v2/listings`. Responses include `Deprecation: true`,
+        `Sunset: Fri, 13 Nov 2026 00:00:00 GMT` and
+        `Link: </v2/listings>; rel="successor-version"` headers. v1 is kept
+        running past the sunset until Demo Day; see DEPRECATION_NOTICE.md.
       parameters:
         - name: status
           in: query
@@ -201,7 +208,57 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
- 
+
+  /v1/listings:
+    $ref: '#/paths/~1listings'
+
+  /v2/listings:
+    get:
+      tags: [Listings]
+      summary: Listings that changed to available since a given date (v2)
+      description: |
+        Same query parameters and items as v1, but the list is wrapped in
+        `{ data, count }` instead of `{ listings }`. Sends no deprecation headers.
+      parameters:
+        - name: status
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [available]
+        - $ref: '#/components/parameters/UpdatedSince'
+      responses:
+        '200':
+          description: Matching listings.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, count]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ListingChange'
+                  count:
+                    type: integer
+                    minimum: 0
+              example:
+                data:
+                  - id: '1'
+                    status: available
+                    reason: vacated
+                    updatedAt: '2026-09-21T19:54:06.000Z'
+                count: 1
+        '400':
+          $ref: '#/components/responses/InvalidQueryParam'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
   /listings/{id}/landlord-contact:
     parameters:
       - $ref: '#/components/parameters/ListingId'
@@ -657,5 +714,4 @@ components:
           type: string
         details:
           type: string
- 
-Claude finished the response
+

@@ -56,6 +56,8 @@ Tip: keep the shape in one small parser function so switching (or rolling back) 
 - **Today (10 Nov):** v2 is live. v1 and the old `/listings` URL still work and now send `Deprecation`, `Sunset` and `Link` headers on every response.
 - **Fri 13 Nov 2026:** v1 stops working.
 
+> **Update (16 Nov 2026):** The 13 November sunset has passed, but v1 and `/listings` are still being served, and the `Sunset` header still shows 13 November. Our usage stats can't yet confirm that every consumer has moved to v2, so we are keeping v1 running until Demo Day. Please migrate to `/v2/listings` now. v1 can be switched off without further notice once Demo Day is over.
+
 ## Questions
 
 Message me any time. I will reply within 1 hour during lab. Please reply to confirm you have read this notice.
